@@ -1,0 +1,102 @@
+[
+  {
+    "title": "Set up project development environment",
+    "description": "Install dependencies, configure VS Code, set up Docker containers, and create initial project structure for the new e-commerce platform.",
+    "status": "completed",
+    "category": "work",
+    "tags": "setup, development, docker, vscode",
+    "priority": 4,
+    "project": "E-commerce Platform",
+    "due_date": "2025-09-10",
+    "completed_at": "2025-09-09"
+  },
+  {
+    "title": "Implement user authentication system",
+    "description": "Create JWT-based authentication with login, register, password reset, and email verification features. Include proper error handling and security measures.",
+    "status": "in_progress",
+    "category": "work",
+    "tags": "auth, jwt, security, backend",
+    "priority": 5,
+    "project": "E-commerce Platform",
+    "due_date": "2025-09-20"
+  },
+  {
+    "title": "Design checkout flow wireframes",
+    "description": "Create detailed wireframes for the mobile and desktop checkout process, including payment options, address forms, and confirmation screens.",
+    "status": "todo",
+    "category": "work",
+    "tags": "design, ux, wireframes, checkout",
+    "priority": 4,
+    "project": "E-commerce Platform",
+    "due_date": "2025-09-18"
+  },
+  {
+    "title": "Weekly team standup",
+    "description": "Prepare updates on current sprint progress, blockers, and plans for the coming week. Review sprint board and update task statuses.",
+    "status": "todo",
+    "category": "work",
+    "tags": "meeting, standup, agile",
+    "priority": 3,
+    "project": "E-commerce Platform",
+    "due_date": "2025-09-15"
+  },
+  {
+    "title": "Learn advanced React performance patterns",
+    "description": "Study React.memo, useMemo, useCallback, and virtualization techniques. Complete online course and build practice project.",
+    "status": "in_progress",
+    "category": "learning",
+    "tags": "react, performance, optimization, course",
+    "priority": 3,
+    "project": "Personal Development",
+    "due_date": "2025-09-30"
+  },
+  {
+    "title": "Update personal portfolio website",
+    "description": "Add recent projects, update bio, improve mobile responsiveness, and optimize SEO. Deploy to new hosting provider.",
+    "status": "todo",
+    "category": "personal",
+    "tags": "portfolio, website, seo, mobile",
+    "priority": 2,
+    "project": "Personal Branding"
+  },
+  {
+    "title": "Code review for payment integration",
+    "description": "Review teammate's Stripe payment integration code, check for security issues, test edge cases, and provide constructive feedback.",
+    "status": "todo",
+    "category": "work",
+    "tags": "code-review, payments, stripe, security",
+    "priority": 4,
+    "project": "E-commerce Platform",
+    "due_date": "2025-09-14"
+  },
+  {
+    "title": "Plan weekend hiking trip",
+    "description": "Research trails, check weather forecast, pack gear, and coordinate with friends. Book campsite if needed.",
+    "status": "todo",
+    "category": "personal",
+    "tags": "hiking, weekend, outdoor, planning",
+    "priority": 2,
+    "project": "Personal Life",
+    "due_date": "2025-09-13"
+  },
+  {
+    "title": "Research AI integration opportunities",
+    "description": "Investigate how to integrate AI features into current projects. Look into OpenAI API, local models, and cost considerations.",
+    "status": "todo",
+    "category": "research",
+    "tags": "ai, integration, openai, research",
+    "priority": 3,
+    "project": "Innovation Research",
+    "due_date": "2025-09-25"
+  },
+  {
+    "title": "Database backup and optimization",
+    "description": "Set up automated backups for production database, analyze query performance, and optimize slow queries.",
+    "status": "on_hold",
+    "category": "work",
+    "tags": "database, backup, optimization, performance",
+    "priority": 3,
+    "project": "E-commerce Platform",
+    "due_date": "2025-09-22"
+  }
+]

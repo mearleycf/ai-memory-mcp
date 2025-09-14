@@ -1,0 +1,30 @@
+{
+  "name": "ai-memory-task-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for persistent AI memory and task management across conversations",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "jest",
+    "import-examples": "node import-examples.js",
+    "test-migration": "node src/test-migration.js",
+    "migrate": "node src/migrate.js"
+  },
+  "keywords": ["mcp", "ai", "memory", "context", "persistence", "task-management", "todo", "productivity"],
+  "author": "Mike Earley",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "sqlite3": "^5.1.6",
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/sqlite3": "^3.1.11",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}

@@ -1,0 +1,58 @@
+[
+  {
+    "title": "Personal Coding Preferences",
+    "content": "I prefer TypeScript over JavaScript, use functional programming patterns when possible, and follow clean code principles. I use ESLint and Prettier for code formatting. I like to use modern ES6+ features and avoid var declarations.",
+    "category": "preferences",
+    "tags": "coding, typescript, functional, clean-code, eslint, prettier",
+    "priority": 4
+  },
+  {
+    "title": "Work Context",
+    "content": "I'm a senior software engineer working on web applications. My main tech stack includes React, Node.js, TypeScript, and PostgreSQL. I work in a team of 8 developers using Agile methodology with 2-week sprints.",
+    "category": "work",
+    "tags": "job, tech-stack, react, nodejs, typescript, postgresql, agile",
+    "priority": 5
+  },
+  {
+    "title": "Current Project - E-commerce Platform",
+    "content": "Working on modernizing the checkout flow for our e-commerce platform. Key challenges include handling payment processing, inventory management, and improving mobile UX. Using Next.js 14, Stripe API, and Supabase.",
+    "category": "projects",
+    "tags": "current-project, ecommerce, checkout, nextjs, stripe, supabase",
+    "priority": 5
+  },
+  {
+    "title": "Communication Style",
+    "content": "I prefer clear, concise explanations with code examples when discussing technical topics. I appreciate when complex concepts are broken down into digestible steps. I like to understand the 'why' behind recommendations, not just the 'how'.",
+    "category": "preferences",
+    "tags": "communication, explanations, examples, learning-style",
+    "priority": 3
+  },
+  {
+    "title": "Development Environment",
+    "content": "Using macOS with VS Code as primary editor. Key extensions: ESLint, Prettier, GitLens, Thunder Client. Terminal: iTerm2 with zsh and oh-my-zsh. Package manager: pnpm preferred over npm. Using Docker for containerization.",
+    "category": "technical",
+    "tags": "dev-environment, macos, vscode, iterm2, docker, pnpm",
+    "priority": 2
+  },
+  {
+    "title": "Learning Goals 2025",
+    "content": "Want to deepen knowledge in: 1) AI/ML integration in web apps, 2) Advanced React patterns and performance optimization, 3) System design for scalable applications, 4) DevOps and CI/CD best practices",
+    "category": "goals",
+    "tags": "learning, ai-ml, react, system-design, devops, 2025",
+    "priority": 4
+  },
+  {
+    "title": "Side Projects",
+    "content": "Building a personal productivity app using React Native and Supabase. Also experimenting with AI-powered code review tools using OpenAI API. Both projects are in early development phase.",
+    "category": "projects",
+    "tags": "side-projects, react-native, supabase, ai, openai-api, productivity",
+    "priority": 2
+  },
+  {
+    "title": "Meeting Preferences",
+    "content": "Prefer meetings in the afternoon (2-5 PM) when possible. Like to have agendas shared in advance. Prefer video calls over phone calls for technical discussions. Keep meetings focused and time-boxed.",
+    "category": "preferences",
+    "tags": "meetings, schedule, afternoon, video-calls, agenda",
+    "priority": 2
+  }
+]

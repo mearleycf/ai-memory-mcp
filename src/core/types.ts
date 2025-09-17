@@ -160,6 +160,135 @@ export interface DeleteAIInstructionArgs {
   id: number;
 }
 
+// Memory service argument interfaces
+export interface CreateMemoryArgs {
+  title: string;
+  content: string;
+  category?: string;
+  project?: string;
+  tags?: string;
+  priority?: number;
+}
+
+export interface SearchMemoriesArgs {
+  query: string;
+  category?: string;
+  project?: string;
+  priority_min?: number;
+  limit?: number;
+  min_similarity?: number;
+}
+
+export interface ListMemoriesArgs {
+  category?: string;
+  project?: string;
+  priority_min?: number;
+  sort_by?: string;
+  sort_order?: string;
+  limit?: number;
+}
+
+export interface GetMemoryArgs {
+  id: number;
+}
+
+export interface UpdateMemoryArgs {
+  id: number;
+  title?: string;
+  content?: string;
+  category?: string;
+  project?: string;
+  tags?: string;
+  priority?: number;
+}
+
+export interface DeleteMemoryArgs {
+  id: number;
+}
+
+export interface GetMemoryStatsArgs {
+  // No specific arguments needed
+}
+
+export interface ExportMemoriesArgs {
+  category?: string;
+  project?: string;
+}
+
+// Task service argument interfaces
+export interface CreateTaskArgs {
+  title: string;
+  description?: string;
+  status?: string;
+  category?: string;
+  project?: string;
+  tags?: string;
+  priority?: number;
+  due_date?: string;
+}
+
+export interface ListTasksArgs {
+  status?: string;
+  category?: string;
+  project?: string;
+  priority_min?: number;
+  archived?: boolean;
+  overdue_only?: boolean;
+  sort_by?: string;
+  sort_order?: string;
+  limit?: number;
+}
+
+export interface SearchTasksArgs {
+  query: string;
+  status?: string;
+  category?: string;
+  project?: string;
+  priority_min?: number;
+  limit?: number;
+  min_similarity?: number;
+}
+
+export interface GetTaskArgs {
+  id: number;
+}
+
+export interface UpdateTaskArgs {
+  id: number;
+  title?: string;
+  description?: string;
+  status?: string;
+  category?: string;
+  project?: string;
+  tags?: string;
+  priority?: number;
+  due_date?: string;
+}
+
+export interface CompleteTaskArgs {
+  id: number;
+}
+
+export interface ArchiveTaskArgs {
+  id: number;
+  archived?: boolean;
+}
+
+export interface DeleteTaskArgs {
+  id: number;
+}
+
+export interface GetTaskStatsArgs {
+  // No specific arguments needed
+}
+
+export interface ExportTasksArgs {
+  status?: string;
+  category?: string;
+  project?: string;
+  include_archived?: boolean;
+}
+
 // Database operation interfaces
 export interface DatabaseOperations {
   dbRun: (sql: string, params?: any[]) => Promise<DatabaseResult>;

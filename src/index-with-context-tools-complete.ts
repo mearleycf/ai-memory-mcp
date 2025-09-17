@@ -11,6 +11,12 @@ import sqlite3 from 'sqlite3';
 import path from 'path';
 import os from 'os';
 import embeddingService from './embedding-service.js';
+import { createAIInstructionService } from './services/ai-instruction-service.js';
+import { createAIInstructionHandlers } from './handlers/instruction-handlers.js';
+import { createMemoryService } from './services/memory-service.js';
+import { createMemoryHandlers, memoryTools } from './handlers/memory-handlers.js';
+import { createTaskService } from './services/task-service.js';
+import { createTaskHandlers, taskTools } from './handlers/task-handlers.js';
 
 // Updated interfaces for normalized schema with embeddings
 interface Memory {
@@ -108,6 +114,12 @@ class AIMemoryServer {
   private dbRun!: (sql: string, params?: any[]) => Promise<DatabaseResult>;
   private dbGet!: (sql: string, params?: any[]) => Promise<any>;
   private dbAll!: (sql: string, params?: any[]) => Promise<any[]>;
+  private aiInstructionService: any;
+  private aiInstructionHandlers: any;
+  private memoryService: any;
+  private memoryHandlers: any;
+  private taskService: any;
+  private taskHandlers: any;
 
   constructor() {
     this.server = new Server(
@@ -123,6 +135,7 @@ class AIMemoryServer {
     );
 
     this.setupDatabase();
+    this.setupServices();
     this.setupToolHandlers();
     this.setupErrorHandling();
   }
@@ -173,6 +186,41 @@ class AIMemoryServer {
     
     // Ensure AI instructions table exists
     await this.ensureAIInstructionsTable();
+  }
+
+  private setupServices() {
+    // Create database manager wrapper with proper interface
+    const dbManager = {
+      dbRun: this.dbRun,
+      dbGet: this.dbGet,
+      dbAll: this.dbAll,
+      // Add other required DatabaseManager methods as no-ops for compatibility
+      db: this.db,
+      initialize: async () => {},
+      setupDatabase: async () => {},
+      ensureAllTables: async () => {},
+      ensureMemoriesTable: async () => {},
+      ensureTasksTable: async () => {},
+      ensureProjectsTable: async () => {},
+      ensureCategoriesTable: async () => {},
+      ensureStatusesTable: async () => {},
+      ensureTagsTable: async () => {},
+      ensureMemoryTagsTable: async () => {},
+      ensureTaskTagsTable: async () => {},
+      ensureAIInstructionsTable: async () => {}
+    };
+
+    // Initialize AI instruction service and handlers
+    this.aiInstructionService = createAIInstructionService(dbManager as any);
+    this.aiInstructionHandlers = createAIInstructionHandlers(dbManager as any);
+    
+    // Initialize memory service and handlers
+    this.memoryService = createMemoryService(dbManager as any);
+    this.memoryHandlers = createMemoryHandlers(dbManager as any);
+    
+    // Initialize task service and handlers
+    this.taskService = createTaskService(dbManager as any);
+    this.taskHandlers = createTaskHandlers(dbManager as any);
   }
 
   private async ensureAIInstructionsTable() {
@@ -698,28 +746,28 @@ class AIMemoryServer {
 
       try {
         switch (name) {
-          // Memory operations (existing - abbreviated method calls)
-          case 'store_memory': return await this.storeMemory(args);
-          case 'search_memories': return await this.searchMemories(args);
-          case 'list_memories': return await this.listMemories(args);
-          case 'get_memory': return await this.getMemory(args);
-          case 'update_memory': return await this.updateMemory(args);
-          case 'delete_memory': return await this.deleteMemory(args);
-          case 'get_memory_stats': return await this.getMemoryStats();
+          // Memory operations (using new service)
+          case 'store_memory': return await this.memoryHandlers.store_memory(args);
+          case 'search_memories': return await this.memoryHandlers.search_memories(args);
+          case 'list_memories': return await this.memoryHandlers.list_memories(args);
+          case 'get_memory': return await this.memoryHandlers.get_memory(args);
+          case 'update_memory': return await this.memoryHandlers.update_memory(args);
+          case 'delete_memory': return await this.memoryHandlers.delete_memory(args);
+          case 'get_memory_stats': return await this.memoryHandlers.get_memory_stats(args);
           case 'list_categories': return await this.listCategories();
-          case 'export_memories': return await this.exportMemories(args);
+          case 'export_memories': return await this.memoryHandlers.export_memories(args);
           
-          // Task operations (existing - abbreviated method calls)
-          case 'create_task': return await this.createTask(args);
-          case 'list_tasks': return await this.listTasks(args);
-          case 'search_tasks': return await this.searchTasks(args);
-          case 'get_task': return await this.getTask(args);
-          case 'update_task': return await this.updateTask(args);
-          case 'complete_task': return await this.completeTask(args);
-          case 'archive_task': return await this.archiveTask(args);
-          case 'delete_task': return await this.deleteTask(args);
-          case 'get_task_stats': return await this.getTaskStats();
-          case 'export_tasks': return await this.exportTasks(args);
+          // Task operations (using new service)
+          case 'create_task': return await this.taskHandlers.create_task(args);
+          case 'list_tasks': return await this.taskHandlers.list_tasks(args);
+          case 'search_tasks': return await this.taskHandlers.search_tasks(args);
+          case 'get_task': return await this.taskHandlers.get_task(args);
+          case 'update_task': return await this.taskHandlers.update_task(args);
+          case 'complete_task': return await this.taskHandlers.complete_task(args);
+          case 'archive_task': return await this.taskHandlers.archive_task(args);
+          case 'delete_task': return await this.taskHandlers.delete_task(args);
+          case 'get_task_stats': return await this.taskHandlers.get_task_stats(args);
+          case 'export_tasks': return await this.taskHandlers.export_tasks(args);
 
           // Project management (existing - abbreviated method calls)
           case 'create_project': return await this.createProject(args);
@@ -744,11 +792,11 @@ class AIMemoryServer {
           case 'get_task_context': return await this.getTaskContext(args);
           case 'get_memory_context': return await this.getMemoryContext(args);
           case 'get_work_priorities': return await this.getWorkPriorities(args);
-          case 'create_ai_instruction': return await this.createAIInstruction(args);
-          case 'list_ai_instructions': return await this.listAIInstructions(args);
-          case 'get_ai_instructions': return await this.getAIInstructions(args);
-          case 'update_ai_instruction': return await this.updateAIInstruction(args);
-          case 'delete_ai_instruction': return await this.deleteAIInstruction(args);
+          case 'create_ai_instruction': return await this.aiInstructionHandlers.createAIInstruction(args);
+          case 'list_ai_instructions': return await this.aiInstructionHandlers.listAIInstructions(args);
+          case 'get_ai_instructions': return await this.aiInstructionHandlers.getAIInstructions(args);
+          case 'update_ai_instruction': return await this.aiInstructionHandlers.updateAIInstruction(args);
+          case 'delete_ai_instruction': return await this.aiInstructionHandlers.deleteAIInstruction(args);
 
           default:
             throw new Error(`Unknown tool: ${name}`);
@@ -1293,319 +1341,11 @@ class AIMemoryServer {
   }
 
   // ====================================================================
-  // AI INSTRUCTION MANAGEMENT METHODS
+  // AI INSTRUCTION MANAGEMENT METHODS - EXTRACTED TO SERVICE
   // ====================================================================
-
-  private async createAIInstruction(args: any) {
-    const { title, content, scope, target_name, priority = 1 } = args;
-
-    try {
-      let target_id = null;
-
-      if (scope === 'project' && target_name) {
-        const project = await this.dbGet('SELECT id FROM projects WHERE name = ?', [target_name.toLowerCase()]);
-        if (!project) {
-          return {
-            content: [{
-              type: 'text',
-              text: `Project '${target_name}' not found.`,
-            }],
-            isError: true,
-          };
-        }
-        target_id = project.id;
-      } else if (scope === 'category' && target_name) {
-        const category = await this.dbGet('SELECT id FROM categories WHERE name = ?', [target_name.toLowerCase()]);
-        if (!category) {
-          return {
-            content: [{
-              type: 'text',
-              text: `Category '${target_name}' not found.`,
-            }],
-            isError: true,
-          };
-        }
-        target_id = category.id;
-      }
-
-      const result = await this.dbRun(
-        'INSERT INTO ai_instructions (title, content, scope, target_id, priority) VALUES (?, ?, ?, ?, ?)',
-        [title, content, scope, target_id, priority]
-      );
-
-      return {
-        content: [{
-          type: 'text',
-          text: `AI instruction created successfully with ID: ${result.lastID}`,
-        }],
-      };
-
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error creating AI instruction: ${error instanceof Error ? error.message : String(error)}`,
-        }],
-        isError: true,
-      };
-    }
-  }
-
-  private async listAIInstructions(args: any) {
-    const { scope, project, category, priority_min } = args;
-
-    try {
-      let sql = `
-        SELECT 
-          ai.*,
-          p.name as project_name,
-          c.name as category_name
-        FROM ai_instructions ai
-        LEFT JOIN projects p ON ai.target_id = p.id AND ai.scope = 'project'
-        LEFT JOIN categories c ON ai.target_id = c.id AND ai.scope = 'category'
-        WHERE 1=1
-      `;
-      const params: any[] = [];
-
-      if (scope) {
-        sql += ` AND ai.scope = ?`;
-        params.push(scope);
-      }
-
-      if (project) {
-        sql += ` AND p.name = ?`;
-        params.push(project.toLowerCase());
-      }
-
-      if (category) {
-        sql += ` AND c.name = ?`;
-        params.push(category.toLowerCase());
-      }
-
-      if (priority_min) {
-        sql += ` AND ai.priority >= ?`;
-        params.push(priority_min);
-      }
-
-      sql += ` ORDER BY ai.priority DESC, ai.created_at DESC`;
-
-      const instructions = await this.dbAll(sql, params);
-
-      if (instructions.length === 0) {
-        return {
-          content: [{
-            type: 'text',
-            text: 'No AI instructions found matching the criteria.',
-          }],
-        };
-      }
-
-      let context = `🤖 **AI Instructions (${instructions.length}):**\n\n`;
-
-      for (const instruction of instructions) {
-        const scopeLabel = instruction.scope === 'global' ? '🌍 Global' : 
-                          instruction.scope === 'project' ? `📁 Project: ${instruction.project_name}` : 
-                          `📂 Category: ${instruction.category_name}`;
-        
-        context += `**${instruction.id}. ${instruction.title}** [P${instruction.priority}]\n`;
-        context += `${scopeLabel}\n`;
-        context += `${instruction.content}\n`;
-        context += `Created: ${instruction.created_at}\n\n`;
-      }
-
-      return {
-        content: [{
-          type: 'text',
-          text: context,
-        }],
-      };
-
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error listing AI instructions: ${error instanceof Error ? error.message : String(error)}`,
-        }],
-        isError: true,
-      };
-    }
-  }
-
-  private async getAIInstructions(args: any) {
-    const { project, category, include_global = true } = args;
-
-    try {
-      let sql = `
-        SELECT 
-          ai.*,
-          p.name as project_name,
-          c.name as category_name
-        FROM ai_instructions ai
-        LEFT JOIN projects p ON ai.target_id = p.id AND ai.scope = 'project'
-        LEFT JOIN categories c ON ai.target_id = c.id AND ai.scope = 'category'
-        WHERE 1=1
-      `;
-      const params: any[] = [];
-
-      const conditions: string[] = [];
-
-      if (include_global) {
-        conditions.push("ai.scope = 'global'");
-      }
-
-      if (project) {
-        conditions.push("(ai.scope = 'project' AND p.name = ?)");
-        params.push(project.toLowerCase());
-      }
-
-      if (category) {
-        conditions.push("(ai.scope = 'category' AND c.name = ?)");
-        params.push(category.toLowerCase());
-      }
-
-      if (conditions.length > 0) {
-        sql += ` AND (${conditions.join(' OR ')})`;
-      }
-
-      sql += ` ORDER BY ai.priority DESC, ai.created_at DESC`;
-
-      const instructions = await this.dbAll(sql, params);
-
-      if (instructions.length === 0) {
-        return {
-          content: [{
-            type: 'text',
-            text: 'No applicable AI instructions found.',
-          }],
-        };
-      }
-
-      let context = `🤖 **Applicable AI Instructions:**\n\n`;
-
-      for (const instruction of instructions) {
-        const scopeLabel = instruction.scope === 'global' ? '🌍 Global' : 
-                          instruction.scope === 'project' ? `📁 Project: ${instruction.project_name}` : 
-                          `📂 Category: ${instruction.category_name}`;
-        
-        context += `**${instruction.title}** [P${instruction.priority}]\n`;
-        context += `${scopeLabel}\n`;
-        context += `${instruction.content}\n\n`;
-      }
-
-      return {
-        content: [{
-          type: 'text',
-          text: context,
-        }],
-      };
-
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error getting AI instructions: ${error instanceof Error ? error.message : String(error)}`,
-        }],
-        isError: true,
-      };
-    }
-  }
-
-  private async updateAIInstruction(args: any) {
-    const { id, title, content, priority } = args;
-
-    try {
-      const updates = [];
-      const params = [];
-
-      if (title !== undefined) {
-        updates.push('title = ?');
-        params.push(title);
-      }
-      if (content !== undefined) {
-        updates.push('content = ?');
-        params.push(content);
-      }
-      if (priority !== undefined) {
-        updates.push('priority = ?');
-        params.push(priority);
-      }
-
-      if (updates.length === 0) {
-        return {
-          content: [{
-            type: 'text',
-            text: 'No updates provided.',
-          }],
-        };
-      }
-
-      updates.push('updated_at = CURRENT_TIMESTAMP');
-      params.push(id);
-
-      const result = await this.dbRun(
-        `UPDATE ai_instructions SET ${updates.join(', ')} WHERE id = ?`,
-        params
-      );
-
-      if (result.changes === 0) {
-        return {
-          content: [{
-            type: 'text',
-            text: `AI instruction with ID ${id} not found.`,
-          }],
-        };
-      }
-
-      return {
-        content: [{
-          type: 'text',
-          text: `AI instruction ${id} updated successfully.`,
-        }],
-      };
-
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error updating AI instruction: ${error instanceof Error ? error.message : String(error)}`,
-        }],
-        isError: true,
-      };
-    }
-  }
-
-  private async deleteAIInstruction(args: any) {
-    const { id } = args;
-
-    try {
-      const result = await this.dbRun('DELETE FROM ai_instructions WHERE id = ?', [id]);
-
-      if (result.changes === 0) {
-        return {
-          content: [{
-            type: 'text',
-            text: `AI instruction with ID ${id} not found.`,
-          }],
-        };
-      }
-
-      return {
-        content: [{
-          type: 'text',
-          text: `AI instruction ${id} deleted successfully.`,
-        }],
-      };
-
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error deleting AI instruction: ${error instanceof Error ? error.message : String(error)}`,
-        }],
-        isError: true,
-      };
-    }
-  }
+  // AI instruction methods have been extracted to:
+  // - src/services/ai-instruction-service.ts
+  // - src/handlers/instruction-handlers.ts
 
   // ====================================================================
   // EMBEDDING HELPER METHODS (same as before)

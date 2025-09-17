@@ -5,18 +5,21 @@
 The project supports multiple server configurations:
 
 ### Standard Server
+
 ```bash
 npm run build
 npm run start
 ```
 
 ### Validation-Enabled Server (Recommended)
+
 ```bash
 npm run build-validation
 npm run start-validation
 ```
 
 ### Development Servers
+
 ```bash
 # Standard development server
 npm run dev
@@ -43,16 +46,19 @@ npm run dev-embeddings
 ## Features by Server Type
 
 ### Standard Server (`index.js`)
+
 - Basic memory and task management
 - No validation rules
 
-### Validation Server (`index-with-validation.js`) 
+### Validation Server (`index-with-validation.js`)
+
 - All standard features
 - **Task validation rules** - prevents poorly structured tasks
 - **Semantic search** with embeddings
 - **Quality enforcement** for AI clients
 
 ### Embeddings Server (`index-with-embeddings.js`)
+
 - All standard features  
 - **Semantic search** with embeddings
 - No validation rules

@@ -322,6 +322,49 @@ export class DatabaseManager implements DatabaseOperations {
   getConnection(): sqlite3.Database {
     return this.db;
   }
+
+  /**
+   * Get project by name
+   */
+  async getProjectByName(name: string): Promise<any> {
+    return this.dbGet('SELECT * FROM projects WHERE name = ?', [name.toLowerCase()]);
+  }
+
+  /**
+   * Get task with relations
+   */
+  async getTaskWithRelations(taskId: number): Promise<any> {
+    return this.dbGet(`
+      SELECT 
+        t.*,
+        s.name as status,
+        c.name as category,
+        p.name as project,
+        GROUP_CONCAT(tag.name, ', ') as tags
+      FROM tasks t
+      LEFT JOIN statuses s ON t.status_id = s.id
+      LEFT JOIN categories c ON t.category_id = c.id
+      LEFT JOIN projects p ON t.project_id = p.id
+      LEFT JOIN task_tags tt ON t.id = tt.task_id
+      LEFT JOIN tags tag ON tt.tag_id = tag.id
+      WHERE t.id = ?
+      GROUP BY t.id
+    `, [taskId]);
+  }
+
+  /**
+   * Generic query method
+   */
+  async query(sql: string, params: any[] = []): Promise<any[]> {
+    return this.dbAll(sql, params);
+  }
+
+  /**
+   * Generic query one method
+   */
+  async queryOne(sql: string, params: any[] = []): Promise<any> {
+    return this.dbGet(sql, params);
+  }
 }
 
 /**

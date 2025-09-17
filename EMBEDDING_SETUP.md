@@ -7,6 +7,7 @@ This guide covers the setup and usage of the new **semantic search capabilities*
 ## 🔧 **Features Added**
 
 ### **Core Capabilities**
+
 - **Semantic Search**: Find relevant memories and tasks based on meaning, not just keywords
 - **Automatic Embedding Generation**: New memories/tasks get embeddings automatically
 - **Fallback to Keyword Search**: Graceful degradation when embeddings aren't available
@@ -14,6 +15,7 @@ This guide covers the setup and usage of the new **semantic search capabilities*
 - **Similarity Scoring**: Results include relevance scores for better understanding
 
 ### **Technical Implementation**
+
 - **Model**: `all-MiniLM-L6-v2` (384 dimensions, offline, fast)
 - **Storage**: JSON columns in SQLite (portable, no external dependencies)
 - **Similarity**: Cosine similarity with configurable thresholds
@@ -24,17 +26,20 @@ This guide covers the setup and usage of the new **semantic search capabilities*
 ## 🚀 **Quick Start**
 
 ### **Step 1: Install Dependencies**
+
 ```bash
 cd /Users/mikeearley/code/mcp_servers/ai-memory-mcp
 npm install
 ```
 
 ### **Step 2: Run Database Migration**
+
 ```bash
 npm run migrate-embeddings
 ```
 
 ### **Step 3: Generate Embeddings for Existing Content**
+
 ```bash
 # Generate embeddings for all existing memories and tasks
 npm run generate-embeddings
@@ -44,6 +49,7 @@ npm run embedding-stats
 ```
 
 ### **Step 4: Start the Enhanced Server**
+
 ```bash
 # Development mode with embeddings
 npm run dev-embeddings
@@ -60,6 +66,7 @@ node dist/index-with-embeddings.js
 ### **Enhanced Search with Semantic Similarity**
 
 **Memory Search with Semantic Ranking:**
+
 ```javascript
 // search_memories tool with semantic search enabled
 {
@@ -71,6 +78,7 @@ node dist/index-with-embeddings.js
 ```
 
 **Task Search with Context Understanding:**
+
 ```javascript
 // search_tasks tool finds related tasks by meaning
 {
@@ -82,6 +90,7 @@ node dist/index-with-embeddings.js
 ```
 
 ### **Results Include Similarity Scores**
+
 ```
 Found 3 memories (semantic search):
 
@@ -111,6 +120,7 @@ Content: User login process had several bugs...
 | `limit` | number | `20` | Maximum number of results |
 
 ### **Embedding Model Information**
+
 - **Model**: `Xenova/all-MiniLM-L6-v2`
 - **Dimensions**: 384
 - **Context Window**: ~512 tokens (400-500 characters)
@@ -122,12 +132,14 @@ Content: User login process had several bugs...
 ## 🔄 **Management Commands**
 
 ### **Database Migration**
+
 ```bash
 # Add embedding columns to existing database
 npm run migrate-embeddings
 ```
 
 ### **Batch Embedding Generation**
+
 ```bash
 # Generate missing embeddings only
 npm run generate-embeddings
@@ -140,6 +152,7 @@ npm run embedding-stats
 ```
 
 ### **Development and Production**
+
 ```bash
 # Development server with embeddings
 npm run dev-embeddings
@@ -156,17 +169,20 @@ npm run build
 ## 📈 **Performance Characteristics**
 
 ### **Embedding Generation Speed**
+
 - **Cold Start**: 3-5 seconds (model loading)
 - **Generation**: ~50-100 embeddings/second
 - **Memory Usage**: ~200-500MB for model
 - **Storage**: ~1.5KB per embedding (384 × 4 bytes)
 
 ### **Search Performance**
+
 - **Semantic Search**: 10-50ms for 1000 embeddings
 - **Keyword Fallback**: 5-20ms
 - **Database Impact**: Minimal (JSON storage)
 
 ### **Best Practices**
+
 - **Batch Processing**: Use batch tools for existing content
 - **Incremental Updates**: New content gets embeddings automatically
 - **Error Handling**: Graceful fallback to keyword search
@@ -179,12 +195,14 @@ npm run build
 ### **Common Issues**
 
 **1. Model Download Fails**
+
 ```bash
 # Check internet connection and try again
 npm run generate-embeddings
 ```
 
 **2. Memory Issues During Batch Processing**
+
 ```bash
 # Process in smaller batches (already implemented)
 # Restart if needed and resume - idempotent operations
@@ -192,6 +210,7 @@ npm run generate-embeddings
 ```
 
 **3. No Semantic Results**
+
 ```bash
 # Check if embeddings exist
 npm run embedding-stats
@@ -203,17 +222,20 @@ npm run generate-embeddings
 ### **Debugging Commands**
 
 **Check Embedding Status:**
+
 ```bash
 npm run embedding-stats
 ```
 
 **Regenerate Specific Content:**
+
 ```bash
 # Force regeneration of all embeddings
 npm run generate-embeddings-force
 ```
 
 **Test Semantic Search:**
+
 ```bash
 # Use the MCP tools to test search with use_semantic: true
 ```
@@ -225,31 +247,37 @@ npm run generate-embeddings-force
 ### **From Non-Embedding Version**
 
 1. **Backup Database** (optional but recommended):
+
    ```bash
    cp ~/.ai-memory.db ~/.ai-memory.db.backup
    ```
 
 2. **Install Dependencies**:
+
    ```bash
    npm install
    ```
 
 3. **Run Migration**:
+
    ```bash
    npm run migrate-embeddings
    ```
 
 4. **Generate Embeddings**:
+
    ```bash
    npm run generate-embeddings
    ```
 
 5. **Switch to Embedding Server**:
+
    ```bash
    npm run dev-embeddings
    ```
 
 ### **Rollback Plan**
+
 - Original server (`npm run dev`) still works
 - Embedding columns are optional - no data loss
 - Remove embedding columns if needed (manual SQL)
@@ -261,6 +289,7 @@ npm run generate-embeddings-force
 ### **Updated Tool Schemas**
 
 **`search_memories` tool** now includes:
+
 ```javascript
 {
   "use_semantic": {
@@ -279,6 +308,7 @@ npm run generate-embeddings-force
 **`search_tasks` tool** has identical additions.
 
 ### **Behavior Changes**
+
 - **Semantic search** is **enabled by default** (can be disabled)
 - **Automatic fallback** to keyword search if no semantic results
 - **Similarity scores** included in semantic results
@@ -291,6 +321,7 @@ npm run generate-embeddings-force
 ### **Manual Testing Steps**
 
 1. **Test Semantic Search**:
+
    ```javascript
    // Should find related content by meaning
    search_memories({
@@ -300,6 +331,7 @@ npm run generate-embeddings-force
    ```
 
 2. **Test Keyword Fallback**:
+
    ```javascript
    // Should work even with use_semantic: false
    search_memories({
@@ -309,6 +341,7 @@ npm run generate-embeddings-force
    ```
 
 3. **Test New Content**:
+
    ```javascript
    // New memories should get embeddings automatically
    store_memory({
@@ -318,6 +351,7 @@ npm run generate-embeddings-force
    ```
 
 4. **Check Statistics**:
+
    ```bash
    npm run embedding-stats
    ```

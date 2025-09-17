@@ -119,3 +119,8 @@ export class StatusTagServiceImpl implements StatusTagService {
     };
   }
 }
+
+// Export factory function
+export function createStatusTagService(db: DatabaseOperations): StatusTagService {
+  return new StatusTagServiceImpl(db);
+}

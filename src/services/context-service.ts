@@ -723,6 +723,11 @@ export class ContextServiceImpl implements ContextService {
   }
 }
 
+// Export factory function
+export function createContextService(db: DatabaseManager): ContextService {
+  return new ContextServiceImpl(db, embeddingService);
+}
+
 // Export singleton instance
 export const contextService = new ContextServiceImpl(
   // These will be injected when the service is properly initialized

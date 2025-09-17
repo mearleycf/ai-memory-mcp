@@ -5,9 +5,9 @@
  * promisified database operations for the AI Memory MCP Server.
  */
 
-import sqlite3 from 'sqlite3';
-import path from 'path';
-import os from 'os';
+import * as sqlite3 from 'sqlite3';
+import * as path from 'path';
+import * as os from 'os';
 import { DatabaseResult, DatabaseOperations } from '../core/types.js';
 
 /**

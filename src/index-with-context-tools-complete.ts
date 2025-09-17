@@ -17,6 +17,10 @@ import { createMemoryService } from './services/memory-service.js';
 import { createMemoryHandlers, memoryTools } from './handlers/memory-handlers.js';
 import { createTaskService } from './services/task-service.js';
 import { createTaskHandlers, taskTools } from './handlers/task-handlers.js';
+import { createProjectService } from './services/project-service.js';
+import { createProjectHandlers, projectTools } from './handlers/project-handlers.js';
+import { createCategoryService } from './services/category-service.js';
+import { createCategoryHandlers, categoryTools } from './handlers/category-handlers.js';
 
 // Updated interfaces for normalized schema with embeddings
 interface Memory {
@@ -120,6 +124,10 @@ class AIMemoryServer {
   private memoryHandlers: any;
   private taskService: any;
   private taskHandlers: any;
+  private projectService: any;
+  private projectHandlers: any;
+  private categoryService: any;
+  private categoryHandlers: any;
 
   constructor() {
     this.server = new Server(
@@ -221,6 +229,14 @@ class AIMemoryServer {
     // Initialize task service and handlers
     this.taskService = createTaskService(dbManager as any);
     this.taskHandlers = createTaskHandlers(dbManager as any);
+    
+    // Initialize project service and handlers
+    this.projectService = createProjectService(dbManager as any);
+    this.projectHandlers = createProjectHandlers(dbManager as any);
+    
+    // Initialize category service and handlers
+    this.categoryService = createCategoryService(dbManager as any);
+    this.categoryHandlers = createCategoryHandlers(dbManager as any);
   }
 
   private async ensureAIInstructionsTable() {
@@ -486,111 +502,11 @@ class AIMemoryServer {
             },
           },
 
-          // Project Management Tools (abbreviated)
-          {
-            name: 'create_project',
-            description: 'Create a new project',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: { type: 'string', description: 'Project name (must be unique)' },
-                description: { type: 'string', description: 'Project description', default: '' },
-                color: { type: 'string', description: 'Project color (hex code)' },
-              },
-              required: ['name'],
-            },
-          },
-          {
-            name: 'list_projects',
-            description: 'List all projects with optional statistics',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                include_stats: { type: 'boolean', description: 'Include memory/task counts', default: true },
-              },
-            },
-          },
-          {
-            name: 'get_project',
-            description: 'Get a specific project by ID or name',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                id: { type: 'number', description: 'Project ID' },
-                name: { type: 'string', description: 'Project name' },
-              },
-            },
-          },
-          {
-            name: 'update_project',
-            description: 'Update an existing project',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                id: { type: 'number', description: 'Project ID to update' },
-                name: { type: 'string', description: 'New project name' },
-                description: { type: 'string', description: 'New description' },
-                color: { type: 'string', description: 'New color' },
-              },
-              required: ['id'],
-            },
-          },
-          {
-            name: 'delete_project',
-            description: 'Delete a project (memories/tasks will have project set to null)',
-            inputSchema: {
-              type: 'object',
-              properties: { id: { type: 'number', description: 'Project ID to delete' } },
-              required: ['id'],
-            },
-          },
+          // Project Management Tools (using new service)
+          ...projectTools,
 
-          // Category Management Tools (abbreviated)
-          {
-            name: 'create_category',
-            description: 'Create a new category',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                name: { type: 'string', description: 'Category name (must be unique)' },
-                description: { type: 'string', description: 'Category description', default: '' },
-              },
-              required: ['name'],
-            },
-          },
-          {
-            name: 'get_category',
-            description: 'Get a specific category by ID or name',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                id: { type: 'number', description: 'Category ID' },
-                name: { type: 'string', description: 'Category name' },
-              },
-            },
-          },
-          {
-            name: 'update_category',
-            description: 'Update an existing category',
-            inputSchema: {
-              type: 'object',
-              properties: {
-                id: { type: 'number', description: 'Category ID to update' },
-                name: { type: 'string', description: 'New category name' },
-                description: { type: 'string', description: 'New description' },
-              },
-              required: ['id'],
-            },
-          },
-          {
-            name: 'delete_category',
-            description: 'Delete a category (memories/tasks will have category set to null)',
-            inputSchema: {
-              type: 'object',
-              properties: { id: { type: 'number', description: 'Category ID to delete' } },
-              required: ['id'],
-            },
-          },
+          // Category Management Tools (using new service)
+          ...categoryTools,
 
           // Status and Tag Management Tools (abbreviated)
           {
@@ -754,7 +670,7 @@ class AIMemoryServer {
           case 'update_memory': return await this.memoryHandlers.update_memory(args);
           case 'delete_memory': return await this.memoryHandlers.delete_memory(args);
           case 'get_memory_stats': return await this.memoryHandlers.get_memory_stats(args);
-          case 'list_categories': return await this.listCategories();
+          case 'list_categories': return await this.categoryHandlers.list_categories(args);
           case 'export_memories': return await this.memoryHandlers.export_memories(args);
           
           // Task operations (using new service)
@@ -769,18 +685,19 @@ class AIMemoryServer {
           case 'get_task_stats': return await this.taskHandlers.get_task_stats(args);
           case 'export_tasks': return await this.taskHandlers.export_tasks(args);
 
-          // Project management (existing - abbreviated method calls)
-          case 'create_project': return await this.createProject(args);
-          case 'list_projects': return await this.listProjects(args);
-          case 'get_project': return await this.getProject(args);
-          case 'update_project': return await this.updateProject(args);
-          case 'delete_project': return await this.deleteProject(args);
+          // Project management (using new service)
+          case 'create_project': return await this.projectHandlers.create_project(args);
+          case 'list_projects': return await this.projectHandlers.list_projects(args);
+          case 'get_project': return await this.projectHandlers.get_project(args);
+          case 'update_project': return await this.projectHandlers.update_project(args);
+          case 'delete_project': return await this.projectHandlers.delete_project(args);
 
-          // Category management (existing - abbreviated method calls)
-          case 'create_category': return await this.createCategory(args);
-          case 'get_category': return await this.getCategory(args);
-          case 'update_category': return await this.updateCategory(args);
-          case 'delete_category': return await this.deleteCategory(args);
+          // Category management (using new service)
+          case 'create_category': return await this.categoryHandlers.create_category(args);
+          case 'get_category': return await this.categoryHandlers.get_category(args);
+          case 'update_category': return await this.categoryHandlers.update_category(args);
+          case 'delete_category': return await this.categoryHandlers.delete_category(args);
+          case 'list_categories': return await this.categoryHandlers.list_categories(args);
 
           // Status and tag management (existing - abbreviated method calls)
           case 'list_statuses': return await this.listStatuses();
@@ -2061,40 +1978,6 @@ Memories added in last 7 days: ${recentMemories.count}`,
     };
   }
 
-  private async listCategories() {
-    const categories = await this.dbAll(`
-      SELECT 
-        c.name,
-        c.description,
-        COALESCE(m.memory_count, 0) as memory_count,
-        COALESCE(t.task_count, 0) as task_count
-      FROM categories c
-      LEFT JOIN (
-        SELECT category_id, COUNT(*) as memory_count 
-        FROM memories 
-        WHERE category_id IS NOT NULL 
-        GROUP BY category_id
-      ) m ON c.id = m.category_id
-      LEFT JOIN (
-        SELECT category_id, COUNT(*) as task_count 
-        FROM tasks 
-        WHERE category_id IS NOT NULL AND archived = FALSE
-        GROUP BY category_id
-      ) t ON c.id = t.category_id
-      ORDER BY (COALESCE(m.memory_count, 0) + COALESCE(t.task_count, 0)) DESC
-    `);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Categories:\n${categories
-            .map((cat) => `${cat.name}: ${cat.memory_count} memories, ${cat.task_count} tasks`)
-            .join('\n')}`,
-        },
-      ],
-    };
-  }
 
   private async exportMemories(args: any) {
     const { category, project } = args;
@@ -2772,418 +2655,6 @@ Memories added in last 7 days: ${recentMemories.count}`,
     };
   }
 
-  // ====================================================================
-  // PROJECT MANAGEMENT METHODS
-  // ====================================================================
-
-  private async createProject(args: any) {
-    const { name, description = '', color } = args;
-
-    try {
-      const result = await this.dbRun(
-        'INSERT INTO projects (name, description, color) VALUES (?, ?, ?)',
-        [name.toLowerCase().trim(), description, color]
-      );
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Project '${name}' created successfully with ID: ${result.lastID}`,
-          },
-        ],
-      };
-    } catch (error: any) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Project '${name}' already exists.`,
-            },
-          ],
-          isError: true,
-        };
-      }
-      throw error;
-    }
-  }
-
-  private async listProjects(args: any) {
-    const { include_stats = true } = args;
-
-    let sql = 'SELECT * FROM projects';
-    
-    if (include_stats) {
-      sql = `
-        SELECT 
-          p.*,
-          COALESCE(m.memory_count, 0) as memory_count,
-          COALESCE(t.task_count, 0) as task_count
-        FROM projects p
-        LEFT JOIN (
-          SELECT project_id, COUNT(*) as memory_count 
-          FROM memories 
-          WHERE project_id IS NOT NULL 
-          GROUP BY project_id
-        ) m ON p.id = m.project_id
-        LEFT JOIN (
-          SELECT project_id, COUNT(*) as task_count 
-          FROM tasks 
-          WHERE project_id IS NOT NULL AND archived = FALSE
-          GROUP BY project_id
-        ) t ON p.id = t.project_id
-      `;
-    }
-
-    sql += ' ORDER BY p.name';
-
-    const projects = await this.dbAll(sql);
-
-    let output = `Found ${projects.length} projects:\n\n`;
-    
-    if (include_stats) {
-      output += projects
-        .map(p => `📁 ${p.name} (ID: ${p.id})\n${p.description}\nMemories: ${p.memory_count}, Tasks: ${p.task_count}\nCreated: ${p.created_at}\n---`)
-        .join('\n\n');
-    } else {
-      output += projects
-        .map(p => `📁 ${p.name} (ID: ${p.id})\n${p.description}\nCreated: ${p.created_at}\n---`)
-        .join('\n\n');
-    }
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: output,
-        },
-      ],
-    };
-  }
-
-  private async getProject(args: any) {
-    const { id, name } = args;
-
-    let project;
-    if (id) {
-      project = await this.dbGet('SELECT * FROM projects WHERE id = ?', [id]);
-    } else if (name) {
-      project = await this.dbGet('SELECT * FROM projects WHERE name = ?', [name.toLowerCase().trim()]);
-    } else {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'Please provide either project ID or name.',
-          },
-        ],
-        isError: true,
-      };
-    }
-
-    if (!project) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Project ${id ? `with ID ${id}` : `'${name}'`} not found.`,
-          },
-        ],
-      };
-    }
-
-    // Get counts
-    const memoryCount = await this.dbGet('SELECT COUNT(*) as count FROM memories WHERE project_id = ?', [project.id]);
-    const taskCount = await this.dbGet('SELECT COUNT(*) as count FROM tasks WHERE project_id = ? AND archived = FALSE', [project.id]);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `📁 Project: ${project.name} (ID: ${project.id})\nDescription: ${project.description || 'No description'}\nColor: ${project.color || 'Not set'}\nMemories: ${memoryCount.count}\nActive Tasks: ${taskCount.count}\nCreated: ${project.created_at}\nUpdated: ${project.updated_at}`,
-        },
-      ],
-    };
-  }
-
-  private async updateProject(args: any) {
-    const { id, name, description, color } = args;
-
-    const updates = [];
-    const params = [];
-
-    if (name !== undefined) {
-      updates.push('name = ?');
-      params.push(name.toLowerCase().trim());
-    }
-    if (description !== undefined) {
-      updates.push('description = ?');
-      params.push(description);
-    }
-    if (color !== undefined) {
-      updates.push('color = ?');
-      params.push(color);
-    }
-
-    if (updates.length === 0) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'No updates provided.',
-          },
-        ],
-      };
-    }
-
-    updates.push('updated_at = CURRENT_TIMESTAMP');
-    params.push(id);
-
-    try {
-      const result = await this.dbRun(
-        `UPDATE projects SET ${updates.join(', ')} WHERE id = ?`,
-        params
-      );
-
-      if (result.changes === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Project with ID ${id} not found.`,
-            },
-          ],
-        };
-      }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Project ${id} updated successfully.`,
-          },
-        ],
-      };
-    } catch (error: any) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Project name already exists.`,
-            },
-          ],
-          isError: true,
-        };
-      }
-      throw error;
-    }
-  }
-
-  private async deleteProject(args: any) {
-    const { id } = args;
-
-    const result = await this.dbRun('DELETE FROM projects WHERE id = ?', [id]);
-
-    if (result.changes === 0) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Project with ID ${id} not found.`,
-          },
-        ],
-      };
-    }
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Project ${id} deleted successfully. Related memories and tasks now have no project assigned.`,
-        },
-      ],
-    };
-  }
-
-  // ====================================================================
-  // CATEGORY MANAGEMENT METHODS
-  // ====================================================================
-
-  private async createCategory(args: any) {
-    const { name, description = '' } = args;
-
-    try {
-      const result = await this.dbRun(
-        'INSERT INTO categories (name, description) VALUES (?, ?)',
-        [name.toLowerCase().trim(), description]
-      );
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Category '${name}' created successfully with ID: ${result.lastID}`,
-          },
-        ],
-      };
-    } catch (error: any) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Category '${name}' already exists.`,
-            },
-          ],
-          isError: true,
-        };
-      }
-      throw error;
-    }
-  }
-
-  private async getCategory(args: any) {
-    const { id, name } = args;
-
-    let category;
-    if (id) {
-      category = await this.dbGet('SELECT * FROM categories WHERE id = ?', [id]);
-    } else if (name) {
-      category = await this.dbGet('SELECT * FROM categories WHERE name = ?', [name.toLowerCase().trim()]);
-    } else {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'Please provide either category ID or name.',
-          },
-        ],
-        isError: true,
-      };
-    }
-
-    if (!category) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Category ${id ? `with ID ${id}` : `'${name}'`} not found.`,
-          },
-        ],
-      };
-    }
-
-    // Get counts
-    const memoryCount = await this.dbGet('SELECT COUNT(*) as count FROM memories WHERE category_id = ?', [category.id]);
-    const taskCount = await this.dbGet('SELECT COUNT(*) as count FROM tasks WHERE category_id = ? AND archived = FALSE', [category.id]);
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `📂 Category: ${category.name} (ID: ${category.id})\nDescription: ${category.description || 'No description'}\nMemories: ${memoryCount.count}\nActive Tasks: ${taskCount.count}\nCreated: ${category.created_at}\nUpdated: ${category.updated_at}`,
-        },
-      ],
-    };
-  }
-
-  private async updateCategory(args: any) {
-    const { id, name, description } = args;
-
-    const updates = [];
-    const params = [];
-
-    if (name !== undefined) {
-      updates.push('name = ?');
-      params.push(name.toLowerCase().trim());
-    }
-    if (description !== undefined) {
-      updates.push('description = ?');
-      params.push(description);
-    }
-
-    if (updates.length === 0) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: 'No updates provided.',
-          },
-        ],
-      };
-    }
-
-    updates.push('updated_at = CURRENT_TIMESTAMP');
-    params.push(id);
-
-    try {
-      const result = await this.dbRun(
-        `UPDATE categories SET ${updates.join(', ')} WHERE id = ?`,
-        params
-      );
-
-      if (result.changes === 0) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Category with ID ${id} not found.`,
-            },
-          ],
-        };
-      }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Category ${id} updated successfully.`,
-          },
-        ],
-      };
-    } catch (error: any) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Category name already exists.`,
-            },
-          ],
-          isError: true,
-        };
-      }
-      throw error;
-    }
-  }
-
-  private async deleteCategory(args: any) {
-    const { id } = args;
-
-    const result = await this.dbRun('DELETE FROM categories WHERE id = ?', [id]);
-
-    if (result.changes === 0) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Category with ID ${id} not found.`,
-          },
-        ],
-      };
-    }
-
-    return {
-      content: [
-        {
-          type: 'text',
-          text: `Category ${id} deleted successfully. Related memories and tasks now have no category assigned.`,
-        },
-      ],
-    };
-  }
 
   // ====================================================================
   // STATUS AND TAG MANAGEMENT METHODS

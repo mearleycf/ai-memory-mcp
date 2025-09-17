@@ -16,9 +16,9 @@ import { ProjectService, createProjectService } from '../services/project-servic
 import { DatabaseManager } from '../core/database.js';
 import { 
   createErrorResponse, 
-  validateId, 
-  validateRequiredString,
-  validateOptionalString,
+  safeValidateId, 
+  safeValidateRequiredString,
+  safeValidateOptionalString,
   handleAsyncError 
 } from '../utils/error-handling.js';
 import { ERROR_MESSAGES } from '../utils/constants.js';
@@ -144,21 +144,21 @@ export class ProjectHandlers {
       }
 
       // Validate name
-      const nameValidation = validateRequiredString(args.name, 'Project name');
+      const nameValidation = safeValidateRequiredString(args.name, 'Project name');
       if (nameValidation.isError) {
-        return nameValidation;
+        return createErrorResponse(nameValidation.message!);
       }
 
       // Validate optional fields
       if (args.description !== undefined) {
-        const descValidation = validateOptionalString(args.description, 'Project description');
+        const descValidation = safeValidateOptionalString(args.description, 'Project description');
         if (descValidation.isError) {
           return descValidation;
         }
       }
 
       if (args.color !== undefined) {
-        const colorValidation = validateOptionalString(args.color, 'Project color');
+        const colorValidation = safeValidateOptionalString(args.color, 'Project color');
         if (colorValidation.isError) {
           return colorValidation;
         }
@@ -203,7 +203,7 @@ export class ProjectHandlers {
 
       // Validate ID if provided
       if (args.id !== undefined) {
-        const idValidation = validateId(args.id, 'Project ID');
+        const idValidation = safeValidateId(args.id, 'Project ID');
         if (idValidation.isError) {
           return idValidation;
         }
@@ -211,7 +211,7 @@ export class ProjectHandlers {
 
       // Validate name if provided
       if (args.name !== undefined) {
-        const nameValidation = validateRequiredString(args.name, 'Project name');
+        const nameValidation = safeValidateRequiredString(args.name, 'Project name');
         if (nameValidation.isError) {
           return nameValidation;
         }
@@ -238,28 +238,28 @@ export class ProjectHandlers {
         return createErrorResponse('Project ID is required for update');
       }
 
-      const idValidation = validateId(args.id, 'Project ID');
+      const idValidation = safeValidateId(args.id, 'Project ID');
       if (idValidation.isError) {
         return idValidation;
       }
 
       // Validate optional fields
       if (args.name !== undefined) {
-        const nameValidation = validateRequiredString(args.name, 'Project name');
+        const nameValidation = safeValidateRequiredString(args.name, 'Project name');
         if (nameValidation.isError) {
           return nameValidation;
         }
       }
 
       if (args.description !== undefined) {
-        const descValidation = validateOptionalString(args.description, 'Project description');
+        const descValidation = safeValidateOptionalString(args.description, 'Project description');
         if (descValidation.isError) {
           return descValidation;
         }
       }
 
       if (args.color !== undefined) {
-        const colorValidation = validateOptionalString(args.color, 'Project color');
+        const colorValidation = safeValidateOptionalString(args.color, 'Project color');
         if (colorValidation.isError) {
           return colorValidation;
         }
@@ -288,7 +288,7 @@ export class ProjectHandlers {
         return createErrorResponse('Project ID is required for deletion');
       }
 
-      const idValidation = validateId(args.id, 'Project ID');
+      const idValidation = safeValidateId(args.id, 'Project ID');
       if (idValidation.isError) {
         return idValidation;
       }

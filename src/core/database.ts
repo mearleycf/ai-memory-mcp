@@ -22,6 +22,11 @@ export class DatabaseManager implements DatabaseOperations {
   public dbGet!: (sql: string, params?: any[]) => Promise<any>;
   public dbAll!: (sql: string, params?: any[]) => Promise<any[]>;
 
+  // Convenience methods that match the interface expected by services
+  get run() { return this.dbRun; }
+  get get() { return this.dbGet; }
+  get all() { return this.dbAll; }
+
   /**
    * Initialize database connection and setup
    */

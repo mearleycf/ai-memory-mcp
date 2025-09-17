@@ -17,7 +17,8 @@ import {
   AIMemoryError, 
   createNotFoundError, 
   createValidationError,
-  handleAsyncError 
+  handleAsyncError,
+  createMCPResponse
 } from '../utils/error-handling.js';
 
 // Project service argument interfaces

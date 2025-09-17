@@ -28,7 +28,8 @@ import {
   AIMemoryError, 
   createNotFoundError, 
   createValidationError,
-  handleAsyncError 
+  handleAsyncError,
+  createMCPResponse
 } from '../utils/error-handling.js';
 
 /**
@@ -125,11 +126,10 @@ export class TaskServiceImpl implements TaskService {
       // Get the created task with relations
       const task = await this.getTaskWithRelations(taskId);
 
-      return {
-        success: true,
-        data: task,
-        message: `Task "${title}" created successfully`
-      };
+      return createMCPResponse(
+        task,
+        `Task "${title}" created successfully`
+      );
     });
   }
 
@@ -216,11 +216,10 @@ export class TaskServiceImpl implements TaskService {
         is_overdue: task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed'
       }));
 
-      return {
-        success: true,
-        data: formattedTasks,
-        message: `Retrieved ${formattedTasks.length} tasks`
-      };
+      return createMCPResponse(
+        formattedTasks,
+        `Retrieved ${formattedTasks.length} tasks`
+      );
     });
   }
 
@@ -297,11 +296,10 @@ export class TaskServiceImpl implements TaskService {
       const tasks = await this.db.all(sql, params);
 
       if (tasks.length === 0) {
-        return {
-          success: true,
-          data: [],
-          message: 'No tasks found matching the criteria'
-        };
+        return createMCPResponse(
+          [],
+          'No tasks found matching the criteria'
+        );
       }
 
       // Calculate similarities and filter by minimum similarity
@@ -309,7 +307,7 @@ export class TaskServiceImpl implements TaskService {
         .map(task => {
           try {
             const taskEmbedding = JSON.parse(task.embedding_vector || '[]');
-            const similarity = embeddingService.calculateSimilarity(queryEmbedding, taskEmbedding);
+            const similarity = embeddingService.calculateSimilarity(queryEmbedding.embedding, taskEmbedding.embedding);
             return { ...task, similarity };
           } catch (error) {
             console.warn(`Failed to parse embedding for task ${task.id}:`, error);
@@ -328,11 +326,10 @@ export class TaskServiceImpl implements TaskService {
         is_overdue: task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed'
       }));
 
-      return {
-        success: true,
-        data: formattedTasks,
-        message: `Found ${formattedTasks.length} tasks matching "${query}"`
-      };
+      return createMCPResponse(
+        formattedTasks,
+        `Found ${formattedTasks.length} tasks matching "${query}"`
+      );
     });
   }
 
@@ -353,11 +350,10 @@ export class TaskServiceImpl implements TaskService {
         throw createNotFoundError(`Task with ID ${id} not found`);
       }
 
-      return {
-        success: true,
-        data: task,
-        message: `Task "${task.title}" retrieved successfully`
-      };
+      return createMCPResponse(
+        task,
+        `Task "${task.title}" retrieved successfully`
+      );
     });
   }
 
@@ -476,11 +472,10 @@ export class TaskServiceImpl implements TaskService {
       // Get the updated task with relations
       const updatedTask = await this.getTaskWithRelations(id);
 
-      return {
-        success: true,
-        data: updatedTask,
-        message: `Task "${updatedTask!.title}" updated successfully`
-      };
+      return createMCPResponse(
+        updatedTask,
+        `Task "${updatedTask!.title}" updated successfully`
+      );
     });
   }
 
@@ -514,11 +509,10 @@ export class TaskServiceImpl implements TaskService {
       // Get the updated task with relations
       const updatedTask = await this.getTaskWithRelations(id);
 
-      return {
-        success: true,
-        data: updatedTask,
-        message: `Task "${updatedTask!.title}" completed successfully`
-      };
+      return createMCPResponse(
+        updatedTask,
+        `Task "${updatedTask!.title}" completed successfully`
+      );
     });
   }
 
@@ -551,11 +545,10 @@ export class TaskServiceImpl implements TaskService {
       // Get the updated task with relations
       const updatedTask = await this.getTaskWithRelations(id);
 
-      return {
-        success: true,
-        data: updatedTask,
-        message: `Task "${updatedTask!.title}" ${archived ? 'archived' : 'unarchived'} successfully`
-      };
+      return createMCPResponse(
+        updatedTask,
+        `Task "${updatedTask!.title}" ${archived ? 'archived' : 'unarchived'} successfully`
+      );
     });
   }
 
@@ -583,11 +576,10 @@ export class TaskServiceImpl implements TaskService {
         throw createNotFoundError(`Task with ID ${id} not found`);
       }
 
-      return {
-        success: true,
-        data: { id },
-        message: `Task "${existing.title}" deleted successfully`
-      };
+      return createMCPResponse(
+        { id },
+        `Task "${existing.title}" deleted successfully`
+      );
     });
   }
 
@@ -641,11 +633,10 @@ export class TaskServiceImpl implements TaskService {
         priority_distribution: priorityStats
       };
 
-      return {
-        success: true,
-        data: stats,
-        message: 'Task statistics retrieved successfully'
-      };
+      return createMCPResponse(
+        stats,
+        'Task statistics retrieved successfully'
+      );
     });
   }
 
@@ -710,11 +701,10 @@ export class TaskServiceImpl implements TaskService {
         archived: task.archived
       }));
 
-      return {
-        success: true,
-        data: exportData,
-        message: `Exported ${exportData.length} tasks`
-      };
+      return createMCPResponse(
+        exportData,
+        `Exported ${exportData.length} tasks`
+      );
     });
   }
 

@@ -26,7 +26,8 @@ import {
   AIMemoryError, 
   createNotFoundError, 
   createValidationError,
-  handleAsyncError 
+  handleAsyncError,
+  createMCPResponse
 } from '../utils/error-handling.js';
 
 /**
@@ -111,11 +112,10 @@ export class MemoryServiceImpl implements MemoryService {
       // Get the created memory with relations
       const memory = await this.getMemoryWithRelations(memoryId);
 
-      return {
-        success: true,
-        data: memory,
-        message: `Memory "${title}" stored successfully`
-      };
+      return createMCPResponse(
+        memory,
+        `Memory "${title}" stored successfully`
+      );
     });
   }
 
@@ -186,11 +186,10 @@ export class MemoryServiceImpl implements MemoryService {
       const memories = await this.db.all(sql, params);
 
       if (memories.length === 0) {
-        return {
-          success: true,
-          data: [],
-          message: 'No memories found matching the criteria'
-        };
+        return createMCPResponse(
+          [],
+          'No memories found matching the criteria'
+        );
       }
 
       // Calculate similarities and filter by minimum similarity
@@ -198,7 +197,7 @@ export class MemoryServiceImpl implements MemoryService {
         .map(memory => {
           try {
             const memoryEmbedding = JSON.parse(memory.embedding_vector || '[]');
-            const similarity = embeddingService.calculateSimilarity(queryEmbedding, memoryEmbedding);
+            const similarity = embeddingService.calculateSimilarity(queryEmbedding.embedding, memoryEmbedding.embedding);
             return { ...memory, similarity };
           } catch (error) {
             console.warn(`Failed to parse embedding for memory ${memory.id}:`, error);
@@ -216,11 +215,10 @@ export class MemoryServiceImpl implements MemoryService {
         similarity: Math.round(memory.similarity * 100) / 100
       }));
 
-      return {
-        success: true,
-        data: formattedMemories,
-        message: `Found ${formattedMemories.length} memories matching "${query}"`
-      };
+      return createMCPResponse(
+        formattedMemories,
+        `Found ${formattedMemories.length} memories matching "${query}"`
+      );
     });
   }
 
@@ -292,11 +290,10 @@ export class MemoryServiceImpl implements MemoryService {
         tags: memory.tags ? memory.tags.split(',') : []
       }));
 
-      return {
-        success: true,
-        data: formattedMemories,
-        message: `Retrieved ${formattedMemories.length} memories`
-      };
+      return createMCPResponse(
+        formattedMemories,
+        `Retrieved ${formattedMemories.length} memories`
+      );
     });
   }
 
@@ -317,11 +314,10 @@ export class MemoryServiceImpl implements MemoryService {
         throw createNotFoundError(`Memory with ID ${id} not found`);
       }
 
-      return {
-        success: true,
-        data: memory,
-        message: `Memory "${memory.title}" retrieved successfully`
-      };
+      return createMCPResponse(
+        memory,
+        `Memory "${memory.title}" retrieved successfully`
+      );
     });
   }
 
@@ -416,11 +412,10 @@ export class MemoryServiceImpl implements MemoryService {
       // Get the updated memory with relations
       const updatedMemory = await this.getMemoryWithRelations(id);
 
-      return {
-        success: true,
-        data: updatedMemory,
-        message: `Memory "${updatedMemory!.title}" updated successfully`
-      };
+      return createMCPResponse(
+        updatedMemory,
+        `Memory "${updatedMemory!.title}" updated successfully`
+      );
     });
   }
 
@@ -448,11 +443,10 @@ export class MemoryServiceImpl implements MemoryService {
         throw createNotFoundError(`Memory with ID ${id} not found`);
       }
 
-      return {
-        success: true,
-        data: { id },
-        message: `Memory "${existing.title}" deleted successfully`
-      };
+      return createMCPResponse(
+        { id },
+        `Memory "${existing.title}" deleted successfully`
+      );
     });
   }
 
@@ -498,11 +492,10 @@ export class MemoryServiceImpl implements MemoryService {
         }
       };
 
-      return {
-        success: true,
-        data: stats,
-        message: 'Memory statistics retrieved successfully'
-      };
+      return createMCPResponse(
+        stats,
+        'Memory statistics retrieved successfully'
+      );
     });
   }
 
@@ -556,11 +549,10 @@ export class MemoryServiceImpl implements MemoryService {
         updated_at: memory.updated_at
       }));
 
-      return {
-        success: true,
-        data: exportData,
-        message: `Exported ${exportData.length} memories`
-      };
+      return createMCPResponse(
+        exportData,
+        `Exported ${exportData.length} memories`
+      );
     });
   }
 

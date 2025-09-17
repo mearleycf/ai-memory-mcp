@@ -257,11 +257,15 @@ export function createMemoryHandlers(db: DatabaseManager) {
     async store_memory(args: any) {
       try {
         // Validate required fields
-        if (!validateRequiredString(args.title)) {
-          return createErrorResponse(ERROR_MESSAGES.INVALID_TITLE);
+        try {
+          validateRequiredString(args.title, 'Title');
+        } catch (error) {
+          return createErrorResponse(error as Error);
         }
-        if (!validateRequiredString(args.content)) {
-          return createErrorResponse(ERROR_MESSAGES.INVALID_CONTENT);
+        try {
+          validateRequiredString(args.content, 'Content');
+        } catch (error) {
+          return createErrorResponse(error as Error);
         }
 
         // Validate optional fields
@@ -278,8 +282,10 @@ export function createMemoryHandlers(db: DatabaseManager) {
     async search_memories(args: any) {
       try {
         // Validate required fields
-        if (!validateRequiredString(args.query)) {
-          return createErrorResponse('Search query is required');
+        try {
+          validateRequiredString(args.query, 'Search query');
+        } catch (error) {
+          return createErrorResponse(error as Error);
         }
 
         // Validate optional fields

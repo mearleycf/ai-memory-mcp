@@ -11,6 +11,7 @@ import sqlite3 from 'sqlite3';
 import path from 'path';
 import os from 'os';
 import embeddingService from './embedding-service.js';
+import { STATUS_EMOJIS } from './core/types.js';
 import { createAIInstructionService } from './services/ai-instruction-service.js';
 import { createAIInstructionHandlers } from './handlers/instruction-handlers.js';
 import { createMemoryService } from './services/memory-service.js';
@@ -822,7 +823,7 @@ class AIMemoryServer {
         context += `**📋 Active Project Tasks (${tasks.length}):**\n`;
         for (const task of tasks) {
           const overdueFlag = task.due_date && new Date(task.due_date) < new Date() ? ' 🔴 OVERDUE' : '';
-          const statusEmoji = { not_started: '⏳', in_progress: '🔄', completed: '✅', cancelled: '❌', on_hold: '⏸️' }[task.status] || '⏳';
+          const statusEmoji = STATUS_EMOJIS[task.status] || '⏳';
           
           context += `• ${statusEmoji} [P${task.priority}] ${task.title}${overdueFlag}\n`;
           if (level !== 'basic') {
@@ -908,7 +909,7 @@ class AIMemoryServer {
       }
 
       const overdueFlag = task.due_date && new Date(task.due_date) < new Date() ? ' 🔴 OVERDUE' : '';
-      const statusEmoji = { not_started: '⏳', in_progress: '🔄', completed: '✅', cancelled: '❌', on_hold: '⏸️' }[task.status] || '⏳';
+      const statusEmoji = STATUS_EMOJIS[task.status] || '⏳';
 
       let context = `${statusEmoji} **Task Context: ${task.title}**${overdueFlag}\n\n`;
       context += `**Status:** ${task.status}\n`;
@@ -957,7 +958,7 @@ class AIMemoryServer {
           if (relatedTasks.length > 0) {
             context += `**🔗 Related Tasks in Project:**\n`;
             for (const relatedTask of relatedTasks) {
-              const relatedEmoji = { not_started: '⏳', in_progress: '🔄', completed: '✅', cancelled: '❌', on_hold: '⏸️' }[relatedTask.status] || '⏳';
+              const relatedEmoji = STATUS_EMOJIS[relatedTask.status] || '⏳';
               context += `• ${relatedEmoji} [P${relatedTask.priority}] ${relatedTask.title}\n`;
             }
             context += '\n';

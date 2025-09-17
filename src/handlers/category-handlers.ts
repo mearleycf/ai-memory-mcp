@@ -16,9 +16,9 @@ import { CategoryService, createCategoryService } from '../services/category-ser
 import { DatabaseManager } from '../core/database.js';
 import { 
   createErrorResponse, 
-  validateId, 
-  validateRequiredString,
-  validateOptionalString,
+  safeValidateId, 
+  safeValidateRequiredString,
+  safeValidateOptionalString,
   handleAsyncError 
 } from '../utils/error-handling.js';
 import { ERROR_MESSAGES } from '../utils/constants.js';
@@ -130,14 +130,14 @@ export class CategoryHandlers {
       }
 
       // Validate name
-      const nameValidation = validateRequiredString(args.name, 'Category name');
+      const nameValidation = safeValidateRequiredString(args.name, 'Category name');
       if (nameValidation.isError) {
         return nameValidation;
       }
 
       // Validate optional fields
       if (args.description !== undefined) {
-        const descValidation = validateOptionalString(args.description, 'Category description');
+        const descValidation = safeValidateOptionalString(args.description, 'Category description');
         if (descValidation.isError) {
           return descValidation;
         }
@@ -166,7 +166,7 @@ export class CategoryHandlers {
 
       // Validate ID if provided
       if (args.id !== undefined) {
-        const idValidation = validateId(args.id, 'Category ID');
+        const idValidation = safeValidateId(args.id, 'Category ID');
         if (idValidation.isError) {
           return idValidation;
         }
@@ -174,7 +174,7 @@ export class CategoryHandlers {
 
       // Validate name if provided
       if (args.name !== undefined) {
-        const nameValidation = validateRequiredString(args.name, 'Category name');
+        const nameValidation = safeValidateRequiredString(args.name, 'Category name');
         if (nameValidation.isError) {
           return nameValidation;
         }
@@ -201,21 +201,21 @@ export class CategoryHandlers {
         return createErrorResponse('Category ID is required for update');
       }
 
-      const idValidation = validateId(args.id, 'Category ID');
+      const idValidation = safeValidateId(args.id, 'Category ID');
       if (idValidation.isError) {
         return idValidation;
       }
 
       // Validate optional fields
       if (args.name !== undefined) {
-        const nameValidation = validateRequiredString(args.name, 'Category name');
+        const nameValidation = safeValidateRequiredString(args.name, 'Category name');
         if (nameValidation.isError) {
           return nameValidation;
         }
       }
 
       if (args.description !== undefined) {
-        const descValidation = validateOptionalString(args.description, 'Category description');
+        const descValidation = safeValidateOptionalString(args.description, 'Category description');
         if (descValidation.isError) {
           return descValidation;
         }
@@ -243,7 +243,7 @@ export class CategoryHandlers {
         return createErrorResponse('Category ID is required for deletion');
       }
 
-      const idValidation = validateId(args.id, 'Category ID');
+      const idValidation = safeValidateId(args.id, 'Category ID');
       if (idValidation.isError) {
         return idValidation;
       }

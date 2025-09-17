@@ -8,7 +8,21 @@ import path from 'path';
  * Tests all aspects of the validation system before deployment
  */
 
+interface TestResult {
+  name: string;
+  passed: boolean;
+  details: string;
+}
+
+interface TestResults {
+  passed: number;
+  failed: number;
+  tests: TestResult[];
+}
+
 class ProductionReadinessTest {
+  private results: TestResults;
+
   constructor() {
     this.results = {
       passed: 0,
@@ -17,7 +31,7 @@ class ProductionReadinessTest {
     };
   }
 
-  logTest(name, passed, details = '') {
+  logTest(name: string, passed: boolean, details: string = '') {
     const status = passed ? '✅' : '❌';
     console.log(`${status} ${name}`);
     if (details) console.log(`   ${details}`);
@@ -72,7 +86,7 @@ class ProductionReadinessTest {
       this.logTest('Validation files compiled', validationFileExists && serverFileExists);
       
     } catch (error) {
-      this.logTest('TypeScript compilation', false, error.message);
+      this.logTest('TypeScript compilation', false, (error as Error).message);
     }
   }
 
@@ -82,14 +96,14 @@ class ProductionReadinessTest {
     try {
       // Test validation server startup
       const startupTest = await this.testServerProcess('npm run start-validation', 2000);
-      this.logTest('Validation server startup', startupTest.success, startupTest.output);
+      this.logTest('Validation server startup', (startupTest as any).success, (startupTest as any).output);
       
       // Test standard server startup
       const standardTest = await this.testServerProcess('npm run start', 2000);  
-      this.logTest('Standard server startup', standardTest.success, standardTest.output);
+      this.logTest('Standard server startup', (standardTest as any).success, (standardTest as any).output);
       
     } catch (error) {
-      this.logTest('Server startup', false, error.message);
+      this.logTest('Server startup', false, (error as Error).message);
     }
   }
 
@@ -100,7 +114,7 @@ class ProductionReadinessTest {
       const testResult = await this.runCommand('npm run test-validation');
       
       // Parse test results
-      const output = testResult.stdout || testResult.stderr || '';
+      const output = (testResult as any).stdout || (testResult as any).stderr || '';
       const passedMatch = output.match(/(\\d+) passed/);
       const failedMatch = output.match(/(\\d+) failed/);
       
@@ -124,7 +138,7 @@ class ProductionReadinessTest {
       this.logTest('Dynamic rule loading', true, 'Rules loaded from memory system');
       
     } catch (error) {
-      this.logTest('Memory system integration', false, error.message);
+      this.logTest('Memory system integration', false, (error as Error).message);
     }
   }
 
@@ -180,7 +194,7 @@ class ProductionReadinessTest {
     }
   }
 
-  async testServerProcess(command, timeout = 3000) {
+  async testServerProcess(command: string, timeout: number = 3000) {
     return new Promise((resolve) => {
       const child = spawn('npm', command.split(' ').slice(1), { 
         stdio: 'pipe',
@@ -214,7 +228,7 @@ class ProductionReadinessTest {
     });
   }
 
-  async runCommand(command) {
+  async runCommand(command: string) {
     return new Promise((resolve, reject) => {
       const child = spawn('sh', ['-c', command], { stdio: 'pipe' });
       
@@ -247,9 +261,9 @@ class ProductionReadinessTest {
     } else {
       console.log('\\n⚠️  Some tests failed. Review issues before deployment.');
       
-      const failedTests = this.results.tests.filter(t => !t.passed);
+      const failedTests = this.results.tests.filter((t: TestResult) => !t.passed);
       console.log('\\nFailed Tests:');
-      failedTests.forEach(test => {
+      failedTests.forEach((test: TestResult) => {
         console.log(`- ${test.name}: ${test.details}`);
       });
     }

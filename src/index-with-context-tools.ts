@@ -11,6 +11,21 @@ import sqlite3 from 'sqlite3';
 import path from 'path';
 import os from 'os';
 import embeddingService from './embedding-service.js';
+import { MemoryServiceImpl } from './services/memory-service.js';
+import { TaskServiceImpl } from './services/task-service.js';
+import { ProjectServiceImpl } from './services/project-service.js';
+import { CategoryServiceImpl } from './services/category-service.js';
+import { ContextServiceImpl } from './services/context-service.js';
+import { AIInstructionServiceImpl } from './services/ai-instruction-service.js';
+import { StatusTagServiceImpl } from './services/status-tag-service.js';
+import { STATUS_EMOJIS } from './core/types.js';
+import { createMemoryHandlers } from './handlers/memory-handlers.js';
+import { createTaskHandlers } from './handlers/task-handlers.js';
+import { createProjectHandlers } from './handlers/project-handlers.js';
+import { createCategoryHandlers } from './handlers/category-handlers.js';
+import { createStatusTagHandlers } from './handlers/status-tag-handlers.js';
+import { createContextHandlers } from './handlers/context-handlers.js';
+import { createAIInstructionHandlers } from './handlers/ai-instruction-handlers.js';
 
 // Updated interfaces for normalized schema with embeddings
 interface Memory {
@@ -108,6 +123,24 @@ class AIMemoryServer {
   private dbRun!: (sql: string, params?: any[]) => Promise<DatabaseResult>;
   private dbGet!: (sql: string, params?: any[]) => Promise<any>;
   private dbAll!: (sql: string, params?: any[]) => Promise<any[]>;
+  
+  // Service instances
+  private memoryService!: MemoryServiceImpl;
+  private taskService!: TaskServiceImpl;
+  private projectService!: ProjectServiceImpl;
+  private categoryService!: CategoryServiceImpl;
+  private contextService!: ContextServiceImpl;
+  private aiInstructionService!: AIInstructionServiceImpl;
+  private statusTagService!: StatusTagServiceImpl;
+  
+  // Handler instances
+  private memoryHandlers!: any;
+  private taskHandlers!: any;
+  private projectHandlers!: any;
+  private categoryHandlers!: any;
+  private statusTagHandlers!: any;
+  private contextHandlers!: any;
+  private aiInstructionHandlers!: any;
 
   constructor() {
     this.server = new Server(
@@ -173,6 +206,9 @@ class AIMemoryServer {
     
     // Ensure AI instructions table exists
     await this.ensureAIInstructionsTable();
+    
+    // Initialize service instances
+    this.initializeServices();
   }
 
   private async ensureAIInstructionsTable() {
@@ -194,6 +230,33 @@ class AIMemoryServer {
     } catch (error) {
       console.error('[AI Instructions] Failed to create table:', error);
     }
+  }
+
+  private initializeServices() {
+    // Create a database manager-like object for services
+    const dbManager = {
+      run: this.dbRun,
+      get: this.dbGet,
+      all: this.dbAll
+    };
+
+    // Initialize service instances
+    this.memoryService = new MemoryServiceImpl(dbManager as any);
+    this.taskService = new TaskServiceImpl(dbManager as any);
+    this.projectService = new ProjectServiceImpl(dbManager as any);
+    this.categoryService = new CategoryServiceImpl(dbManager as any);
+    this.contextService = new ContextServiceImpl(dbManager as any, embeddingService);
+    this.aiInstructionService = new AIInstructionServiceImpl(dbManager as any);
+    this.statusTagService = new StatusTagServiceImpl(dbManager as any);
+    
+    // Initialize handlers
+    this.memoryHandlers = createMemoryHandlers(dbManager as any);
+    this.taskHandlers = createTaskHandlers(dbManager as any);
+    this.projectHandlers = createProjectHandlers(dbManager as any);
+    this.categoryHandlers = createCategoryHandlers(dbManager as any);
+    this.statusTagHandlers = createStatusTagHandlers(this.statusTagService);
+    this.contextHandlers = createContextHandlers(this.contextService);
+    this.aiInstructionHandlers = createAIInstructionHandlers(this.aiInstructionService);
   }
 
   private setupToolHandlers() {
@@ -694,65 +757,68 @@ class AIMemoryServer {
     });
 
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      const { name, arguments: args } = request.params;
+      const { name, arguments: args = {} } = request.params;
 
       try {
+        let result;
         switch (name) {
-          // Memory operations (existing - abbreviated method calls)
-          case 'store_memory': return await this.storeMemory(args);
-          case 'search_memories': return await this.searchMemories(args);
-          case 'list_memories': return await this.listMemories(args);
-          case 'get_memory': return await this.getMemory(args);
-          case 'update_memory': return await this.updateMemory(args);
-          case 'delete_memory': return await this.deleteMemory(args);
-          case 'get_memory_stats': return await this.getMemoryStats();
-          case 'list_categories': return await this.listCategories();
-          case 'export_memories': return await this.exportMemories(args);
+          // Memory operations (using handlers)
+          case 'store_memory': result = await this.memoryHandlers.store_memory(args); break;
+          case 'search_memories': result = await this.memoryHandlers.search_memories(args); break;
+          case 'list_memories': result = await this.memoryHandlers.list_memories(args); break;
+          case 'get_memory': result = await this.memoryHandlers.get_memory(args); break;
+          case 'update_memory': result = await this.memoryHandlers.update_memory(args); break;
+          case 'delete_memory': result = await this.memoryHandlers.delete_memory(args); break;
+          case 'get_memory_stats': result = await this.memoryHandlers.get_memory_stats(args); break;
+          case 'list_categories': result = await this.categoryHandlers.list_categories(args); break;
+          case 'export_memories': result = await this.memoryHandlers.export_memories(args); break;
           
-          // Task operations (existing - abbreviated method calls)
-          case 'create_task': return await this.createTask(args);
-          case 'list_tasks': return await this.listTasks(args);
-          case 'search_tasks': return await this.searchTasks(args);
-          case 'get_task': return await this.getTask(args);
-          case 'update_task': return await this.updateTask(args);
-          case 'complete_task': return await this.completeTask(args);
-          case 'archive_task': return await this.archiveTask(args);
-          case 'delete_task': return await this.deleteTask(args);
-          case 'get_task_stats': return await this.getTaskStats();
-          case 'export_tasks': return await this.exportTasks(args);
+          // Task operations (using handlers)
+          case 'create_task': result = await this.taskHandlers.create_task(args); break;
+          case 'list_tasks': result = await this.taskHandlers.list_tasks(args); break;
+          case 'search_tasks': result = await this.taskHandlers.search_tasks(args); break;
+          case 'get_task': result = await this.taskHandlers.get_task(args); break;
+          case 'update_task': result = await this.taskHandlers.update_task(args); break;
+          case 'complete_task': result = await this.taskHandlers.complete_task(args); break;
+          case 'archive_task': result = await this.taskHandlers.archive_task(args); break;
+          case 'delete_task': result = await this.taskHandlers.delete_task(args); break;
+          case 'get_task_stats': result = await this.taskHandlers.get_task_stats(args); break;
+          case 'export_tasks': result = await this.taskHandlers.export_tasks(args); break;
 
-          // Project management (existing - abbreviated method calls)
-          case 'create_project': return await this.createProject(args);
-          case 'list_projects': return await this.listProjects(args);
-          case 'get_project': return await this.getProject(args);
-          case 'update_project': return await this.updateProject(args);
-          case 'delete_project': return await this.deleteProject(args);
+          // Project management (using handlers)
+          case 'create_project': result = await this.projectHandlers.create_project(args); break;
+          case 'list_projects': result = await this.projectHandlers.list_projects(args); break;
+          case 'get_project': result = await this.projectHandlers.get_project(args); break;
+          case 'update_project': result = await this.projectHandlers.update_project(args); break;
+          case 'delete_project': result = await this.projectHandlers.delete_project(args); break;
 
-          // Category management (existing - abbreviated method calls)
-          case 'create_category': return await this.createCategory(args);
-          case 'get_category': return await this.getCategory(args);
-          case 'update_category': return await this.updateCategory(args);
-          case 'delete_category': return await this.deleteCategory(args);
+          // Category management (using handlers)
+          case 'create_category': result = await this.categoryHandlers.create_category(args); break;
+          case 'get_category': result = await this.categoryHandlers.get_category(args); break;
+          case 'update_category': result = await this.categoryHandlers.update_category(args); break;
+          case 'delete_category': result = await this.categoryHandlers.delete_category(args); break;
 
-          // Status and tag management (existing - abbreviated method calls)
-          case 'list_statuses': return await this.listStatuses();
-          case 'list_tags': return await this.listTags();
-          case 'delete_tag': return await this.deleteTag(args);
+          // Status and tag management (using new service)
+          case 'list_statuses': result = await this.statusTagHandlers.list_statuses(args); break;
+          case 'list_tags': result = await this.statusTagHandlers.list_tags(args); break;
+          case 'delete_tag': result = await this.statusTagHandlers.delete_tag(args); break;
 
           // NEW: AI Working Context Tools
-          case 'get_project_context': return await this.getProjectContext(args);
-          case 'get_task_context': return await this.getTaskContext(args);
-          case 'get_memory_context': return await this.getMemoryContext(args);
-          case 'get_work_priorities': return await this.getWorkPriorities(args);
-          case 'create_ai_instruction': return await this.createAIInstruction(args);
-          case 'list_ai_instructions': return await this.listAIInstructions(args);
-          case 'get_ai_instructions': return await this.getAIInstructions(args);
-          case 'update_ai_instruction': return await this.updateAIInstruction(args);
-          case 'delete_ai_instruction': return await this.deleteAIInstruction(args);
+          case 'get_project_context': result = await this.contextHandlers.get_project_context(args); break;
+          case 'get_task_context': result = await this.contextHandlers.get_task_context(args); break;
+          case 'get_memory_context': result = await this.contextHandlers.get_memory_context(args); break;
+          case 'get_work_priorities': result = await this.contextHandlers.get_work_priorities(args); break;
+          case 'create_ai_instruction': result = await this.aiInstructionHandlers.create_ai_instruction(args); break;
+          case 'list_ai_instructions': result = await this.aiInstructionHandlers.list_ai_instructions(args); break;
+          case 'get_ai_instructions': result = await this.aiInstructionHandlers.get_ai_instructions(args); break;
+          case 'update_ai_instruction': result = await this.aiInstructionHandlers.update_ai_instruction(args); break;
+          case 'delete_ai_instruction': result = await this.aiInstructionHandlers.delete_ai_instruction(args); break;
 
           default:
             throw new Error(`Unknown tool: ${name}`);
         }
+        
+        return result;
       } catch (error) {
         return {
           content: [
@@ -857,7 +923,7 @@ class AIMemoryServer {
         context += `**📋 Active Project Tasks (${tasks.length}):**\n`;
         for (const task of tasks) {
           const overdueFlag = task.due_date && new Date(task.due_date) < new Date() ? ' 🔴 OVERDUE' : '';
-          const statusEmoji = { not_started: '⏳', in_progress: '🔄', completed: '✅', cancelled: '❌', on_hold: '⏸️' }[task.status] || '⏳';
+          const statusEmoji = STATUS_EMOJIS[task.status] || '⏳';
           
           context += `• ${statusEmoji} [P${task.priority}] ${task.title}${overdueFlag}\n`;
           if (level !== 'basic') {
@@ -943,7 +1009,7 @@ class AIMemoryServer {
       }
 
       const overdueFlag = task.due_date && new Date(task.due_date) < new Date() ? ' 🔴 OVERDUE' : '';
-      const statusEmoji = { not_started: '⏳', in_progress: '🔄', completed: '✅', cancelled: '❌', on_hold: '⏸️' }[task.status] || '⏳';
+      const statusEmoji = STATUS_EMOJIS[task.status] || '⏳';
 
       let context = `${statusEmoji} **Task Context: ${task.title}**${overdueFlag}\n\n`;
       context += `**Status:** ${task.status}\n`;
@@ -992,7 +1058,7 @@ class AIMemoryServer {
           if (relatedTasks.length > 0) {
             context += `**🔗 Related Tasks in Project:**\n`;
             for (const relatedTask of relatedTasks) {
-              const relatedEmoji = { not_started: '⏳', in_progress: '🔄', completed: '✅', cancelled: '❌', on_hold: '⏸️' }[relatedTask.status] || '⏳';
+              const relatedEmoji = STATUS_EMOJIS[relatedTask.status] || '⏳';
               context += `• ${relatedEmoji} [P${relatedTask.priority}] ${relatedTask.title}\n`;
             }
             context += '\n';
@@ -1819,9 +1885,9 @@ class AIMemoryServer {
     const projectId = await this.ensureProject(project);
     const tagIds = await this.ensureTags(tags);
     const result = await this.dbRun(`INSERT INTO memories (title, content, category_id, project_id, priority) VALUES (?, ?, ?, ?, ?)`, [title, content, categoryId, projectId, priority]);
-    if (result.lastID && tagIds.length > 0) await this.updateMemoryTags(result.lastID, tagIds);
+    if (result.lastID && tagIds.length > 0) await this.statusTagService.updateMemoryTags(result.lastID, tagIds);
     if (result.lastID) {
-      const memoryWithRelations = await this.getMemoryWithRelations(result.lastID);
+      const memoryWithRelations = await this.statusTagService.getMemoryWithRelations(result.lastID);
       if (memoryWithRelations) this.generateAndStoreEmbedding(memoryWithRelations, 'memory', result.lastID);
     }
     return { content: [{ type: 'text', text: `Memory stored successfully with ID: ${result.lastID}` }] };

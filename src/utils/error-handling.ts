@@ -6,6 +6,7 @@
  */
 
 import { ERROR_MESSAGES } from './constants.js';
+import { MCPResponse } from '../core/types.js';
 
 /**
  * Custom error types for the application
@@ -67,7 +68,17 @@ export interface ErrorResponse {
 /**
  * Create standardized error response for MCP tools
  */
-export function createErrorResponse(error: Error): ErrorResponse {
+export function createErrorResponse(error: Error | string): ErrorResponse {
+  // Handle string errors (legacy support)
+  if (typeof error === 'string') {
+    return {
+      error: {
+        code: 'ERROR',
+        message: error,
+      },
+    };
+  }
+
   if (error instanceof AIMemoryError) {
     return {
       error: {
@@ -193,9 +204,9 @@ export function logError(error: Error, context?: any): void {
   };
 
   if (error instanceof AIMemoryError) {
-    errorInfo['code'] = error.code;
-    errorInfo['statusCode'] = error.statusCode;
-    errorInfo['details'] = error.details;
+    (errorInfo as any)['code'] = error.code;
+    (errorInfo as any)['statusCode'] = error.statusCode;
+    (errorInfo as any)['details'] = error.details;
   }
 
   console.error('Error occurred:', JSON.stringify(errorInfo, null, 2));
@@ -244,4 +255,65 @@ export function validateScope(scope: any, fieldName: string = 'Scope'): 'global'
   }
   
   return scope as 'global' | 'project' | 'category';
+}
+
+/**
+ * Create MCP response with proper content format
+ */
+export function createMCPResponse(data: any, message: string = 'Success'): MCPResponse {
+  return {
+    content: [{
+      type: 'text' as const,
+      text: JSON.stringify({
+        success: true,
+        data,
+        message
+      })
+    }]
+  };
+}
+
+/**
+ * Validation result interface for handlers that expect return values
+ */
+export interface ValidationResult {
+  isError: boolean;
+  message?: string;
+  value?: any;
+}
+
+/**
+ * Safe validation wrapper that returns result instead of throwing
+ */
+export function safeValidateRequiredString(value: any, fieldName: string): ValidationResult {
+  try {
+    const result = validateRequiredString(value, fieldName);
+    return { isError: false, value: result };
+  } catch (error) {
+    return { isError: true, message: (error as Error).message };
+  }
+}
+
+/**
+ * Safe validation wrapper for optional strings
+ */
+export function safeValidateOptionalString(value: any, fieldName: string): ValidationResult {
+  try {
+    const result = validateOptionalString(value, fieldName);
+    return { isError: false, value: result };
+  } catch (error) {
+    return { isError: true, message: (error as Error).message };
+  }
+}
+
+/**
+ * Safe validation wrapper for IDs
+ */
+export function safeValidateId(id: any, resourceName: string = 'Resource'): ValidationResult {
+  try {
+    const result = validateId(id, resourceName);
+    return { isError: false, value: result };
+  } catch (error) {
+    return { isError: true, message: (error as Error).message };
+  }
 }

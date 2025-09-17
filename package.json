@@ -7,11 +7,21 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
+    "dev-embeddings": "tsx src/index-with-embeddings.ts",
     "start": "node dist/index.js",
     "test": "jest",
     "import-examples": "node import-examples.js",
     "test-migration": "node src/test-migration.js",
-    "migrate": "node src/migrate.js"
+    "migrate": "node src/migrate.js",
+    "migrate-embeddings": "tsx src/embedding-migration.ts",
+    "generate-embeddings": "tsx src/batch-embedding.ts",
+    "generate-embeddings-force": "tsx src/batch-embedding.ts --force",
+    "embedding-stats": "tsx src/batch-embedding.ts --stats-only",
+    "test-validation": "tsx src/test-validation.ts",
+    "dev-validation": "tsx src/index-with-validation.ts",
+    "start-validation": "node dist/index-with-validation.js",
+    "build-validation": "npm run build && echo 'Validation server built successfully'",
+    "validate-and-run": "npm run build && npm run start-validation"
   },
   "keywords": ["mcp", "ai", "memory", "context", "persistence", "task-management", "todo", "productivity"],
   "author": "Mike Earley",
@@ -19,7 +29,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "sqlite3": "^5.1.6",
-    "node-fetch": "^3.3.2"
+    "node-fetch": "^3.3.2",
+    "@xenova/transformers": "^2.17.2"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

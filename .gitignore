@@ -47,3 +47,5 @@ test-results/
 
 # TypeScript cache
 *.tsbuildinfo
+
+/src/generated/prisma

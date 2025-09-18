@@ -3,7 +3,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { DatabaseManager } from './core/database.js';
+import { PrismaDatabaseService } from './core/prisma-database.js';
 import embeddingService from './embedding-service.js';
 import { STATUS_EMOJIS } from './core/types.js';
 

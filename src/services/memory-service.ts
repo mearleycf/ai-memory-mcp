@@ -8,7 +8,7 @@
  * @fileoverview Memory service with semantic search and embedding integration
  */
 
-import { DatabaseManager } from '../core/database.js';
+import { PrismaDatabaseService } from '../core/prisma-database.js';
 import { embeddingService } from '../embedding-service.js';
 import { 
   Memory,
@@ -51,7 +51,7 @@ export interface MemoryService {
  * Integrates with embedding service for intelligent memory retrieval.
  */
 export class MemoryServiceImpl implements MemoryService {
-  constructor(private db: DatabaseManager) {}
+  constructor(private db: PrismaDatabaseService) {}
 
   /**
    * Store a new memory with optional embedding generation
@@ -85,12 +85,17 @@ export class MemoryServiceImpl implements MemoryService {
       const tagIds = await this.ensureTags(tags);
 
       // Insert memory
-      const result = await this.db.run(`
-        INSERT INTO memories (title, content, category_id, project_id, priority, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `, [title, content, categoryId, projectId, priority]);
+      const memory = await this.db.client.memory.create({
+        data: {
+          title,
+          content,
+          categoryId,
+          projectId,
+          priority,
+        },
+      });
 
-      const memoryId = result.lastID!;
+      const memoryId = memory.id;
 
       // Add tags if provided
       if (tagIds.length > 0) {
@@ -100,11 +105,14 @@ export class MemoryServiceImpl implements MemoryService {
       // Generate embedding for semantic search
       try {
         const embedding = await embeddingService.generateEmbedding(`${title}: ${content}`);
-        await this.db.run(`
-          UPDATE memories 
-          SET embedding = ?, embedding_model = ?, embedding_created_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `, [JSON.stringify(embedding), embeddingService.getModelName(), memoryId]);
+        await this.db.client.memory.update({
+          where: { id: memoryId },
+          data: {
+            embedding: JSON.stringify(embedding),
+            embeddingModel: embeddingService.getModelName(),
+            embeddingCreatedAt: new Date(),
+          },
+        });
       } catch (embeddingError) {
         console.warn(`Failed to generate embedding for memory ${memoryId}:`, embeddingError);
       }
@@ -593,76 +601,36 @@ export class MemoryServiceImpl implements MemoryService {
    * Update memory tags
    */
   private async updateMemoryTags(memoryId: number, tagIds: number[]): Promise<void> {
-    // Remove existing tags
-    await this.db.run('DELETE FROM memory_tags WHERE memory_id = ?', [memoryId]);
-    
-    // Add new tags
-    for (const tagId of tagIds) {
-      await this.db.run(
-        'INSERT INTO memory_tags (memory_id, tag_id) VALUES (?, ?)',
-        [memoryId, tagId]
-      );
-    }
+    await this.db.updateMemoryTags(memoryId, tagIds);
   }
 
   /**
    * Ensure category exists and return its ID
    */
   private async ensureCategory(categoryName: string): Promise<number> {
-    let category = await this.db.get('SELECT id FROM categories WHERE name = ?', [categoryName]);
-    
-    if (!category) {
-      const result = await this.db.run(`
-        INSERT INTO categories (name, description, created_at, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `, [categoryName, `Auto-created category: ${categoryName}`]);
-      return result.lastID!;
+    const categoryId = await this.db.ensureCategory(categoryName);
+    if (!categoryId) {
+      throw createValidationError(`Failed to create or find category: ${categoryName}`);
     }
-    
-    return category.id;
+    return categoryId;
   }
 
   /**
    * Ensure project exists and return its ID
    */
   private async ensureProject(projectName: string): Promise<number> {
-    let project = await this.db.get('SELECT id FROM projects WHERE name = ?', [projectName]);
-    
-    if (!project) {
-      const result = await this.db.run(`
-        INSERT INTO projects (name, description, created_at, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `, [projectName, `Auto-created project: ${projectName}`]);
-      return result.lastID!;
+    const projectId = await this.db.ensureProject(projectName);
+    if (!projectId) {
+      throw createValidationError(`Failed to create or find project: ${projectName}`);
     }
-    
-    return project.id;
+    return projectId;
   }
 
   /**
    * Ensure tags exist and return their IDs
    */
   private async ensureTags(tagsString: string): Promise<number[]> {
-    if (!tagsString) return [];
-    
-    const tagNames = tagsString.split(',').map(tag => tag.trim()).filter(tag => tag);
-    const tagIds: number[] = [];
-    
-    for (const tagName of tagNames) {
-      let tag = await this.db.get('SELECT id FROM tags WHERE name = ?', [tagName]);
-      
-      if (!tag) {
-        const result = await this.db.run(`
-          INSERT INTO tags (name, created_at)
-          VALUES (?, CURRENT_TIMESTAMP)
-        `, [tagName]);
-        tagIds.push(result.lastID!);
-      } else {
-        tagIds.push(tag.id);
-      }
-    }
-    
-    return tagIds;
+    return await this.db.ensureTags(tagsString);
   }
 }
 

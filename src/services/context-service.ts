@@ -121,6 +121,9 @@ export class ContextServiceImpl implements ContextService {
       }
 
       // Get project details
+      console.log('[Context Service] Database object:', typeof this.database);
+      console.log('[Context Service] Database methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(this.database)));
+      console.log('[Context Service] getProjectByName method:', typeof this.database.getProjectByName);
       const projectData = await this.database.getProjectByName(project.toLowerCase());
       if (!projectData) {
         throw createNotFoundError('Project', project);

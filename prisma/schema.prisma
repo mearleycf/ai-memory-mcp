@@ -1,0 +1,154 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Category {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String   @default("")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  memories    Memory[]
+  tasks       Task[]
+
+  @@map("categories")
+}
+
+model Project {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String   @default("")
+  color       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  memories    Memory[]
+  tasks       Task[]
+
+  @@map("projects")
+}
+
+model Status {
+  id                Int      @id @default(autoincrement())
+  name              String   @unique
+  description       String   @default("")
+  isCompletedStatus Boolean  @default(false) @map("is_completed_status")
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  // Relations
+  tasks             Task[]
+
+  @@map("statuses")
+}
+
+model Tag {
+  id        Int      @id @default(autoincrement())
+  name      String   @unique
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  memoryTags MemoryTag[]
+  taskTags   TaskTag[]
+
+  @@map("tags")
+}
+
+model Memory {
+  id                Int      @id @default(autoincrement())
+  title             String
+  content           String
+  categoryId        Int?     @map("category_id")
+  projectId         Int?     @map("project_id")
+  priority          Int      @default(1)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  embedding         String?
+  embeddingModel    String?  @map("embedding_model")
+  embeddingCreatedAt DateTime? @map("embedding_created_at")
+
+  // Relations
+  category          Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  memoryTags        MemoryTag[]
+
+  @@map("memories")
+}
+
+model Task {
+  id                Int      @id @default(autoincrement())
+  title             String
+  description       String   @default("")
+  statusId          Int      @map("status_id")
+  categoryId        Int?     @map("category_id")
+  projectId         Int?     @map("project_id")
+  priority          Int      @default(1)
+  dueDate           DateTime? @map("due_date")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  completedAt       DateTime? @map("completed_at")
+  archived          Boolean  @default(false)
+  embedding         String?
+  embeddingModel    String?  @map("embedding_model")
+  embeddingCreatedAt DateTime? @map("embedding_created_at")
+
+  // Relations
+  status            Status   @relation(fields: [statusId], references: [id])
+  category          Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  project           Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  taskTags          TaskTag[]
+
+  @@map("tasks")
+}
+
+model MemoryTag {
+  id        Int      @id @default(autoincrement())
+  memoryId  Int      @map("memory_id")
+  tagId     Int      @map("tag_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  memory    Memory   @relation(fields: [memoryId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([memoryId, tagId])
+  @@map("memory_tags")
+}
+
+model TaskTag {
+  id        Int      @id @default(autoincrement())
+  taskId    Int      @map("task_id")
+  tagId     Int      @map("tag_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relations
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, tagId])
+  @@map("task_tags")
+}
+
+model AIInstruction {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String
+  scope     String   // 'global', 'project', 'category'
+  targetId  Int?     @map("target_id")
+  priority  Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_instructions")
+}

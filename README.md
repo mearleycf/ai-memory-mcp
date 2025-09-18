@@ -470,3 +470,7 @@ MIT License - feel free to modify and distribute as needed.
 5. **Explore**: Use `list_projects` and `list_categories` to see your data organization
 
 Your AI assistant now has enterprise-grade persistent memory and task management! 🎉
+
+## Minor change
+
+just testing

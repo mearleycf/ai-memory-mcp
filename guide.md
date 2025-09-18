@@ -73,7 +73,7 @@ All core functionality is **fully implemented and working**:
 
 ### **Target Modern Architecture**
 
-```
+```text
 src/
 ├── core/
 │   ├── server.ts              # MCP server setup & initialization (< 200 lines)
@@ -121,7 +121,7 @@ src/
 ✅ Strict TypeScript configuration
 ✅ Explicit return types for all public methods
 ✅ Comprehensive JSDoc comments
-✅ Input/output interface definitions  
+✅ Input/output interface definitions
 ✅ Proper error types and handling
 ✅ Consistent naming conventions
 ✅ Proper separation of concerns
@@ -138,7 +138,7 @@ src/
    - Move all context tools methods from monolithic files
    - Include: getProjectContext, getTaskContext, getMemoryContext, getWorkPriorities
 
-2. **Extract Context Handlers**  
+2. **Extract Context Handlers**
    - Create `src/handlers/context-handlers.ts`
    - Move all context tool MCP handlers
    - Include: get_project_context, get_task_context, get_memory_context, get_work_priorities
@@ -183,14 +183,14 @@ src/
    - Implement proper error types in `src/utils/error-handling.ts`
 
 2. **Validation & Utilities**
-   - Create `src/utils/validation.ts` with input validation schemas  
+   - Create `src/utils/validation.ts` with input validation schemas
    - Create `src/utils/formatting.ts` for consistent output formatting
    - Create `src/utils/database-helpers.ts` for reusable DB operations
 
 3. **Testing Infrastructure**
    - Set up unit testing framework in `tests/` directory
    - Create service unit tests
-   - Create handler unit tests  
+   - Create handler unit tests
    - Set up integration testing
 
 4. **Documentation & Configuration**
@@ -207,7 +207,7 @@ Use these queries to get project context in new chats:
 
 #### **Get Current Project Status**
 
-```
+```text
 ai-memory:search_memories
 - query: "context tools implementation status refactoring"
 - project: "ai memory server"
@@ -216,8 +216,8 @@ ai-memory:search_memories
 
 #### **Get Refactoring Requirements**
 
-```
-ai-memory:search_memories  
+```text
+ai-memory:search_memories
 - query: "code quality refactoring architecture file size violations"
 - project: "ai memory server"
 - priority_min: 4
@@ -225,7 +225,7 @@ ai-memory:search_memories
 
 #### **Get Critical Tasks**
 
-```
+```text
 ai-memory:list_tasks
 - project: "ai memory server"
 - priority_min: 4
@@ -235,7 +235,7 @@ ai-memory:list_tasks
 ### **Key Memory IDs for Reference**
 
 - **Memory #92**: Complete code quality assessment and refactoring plan
-- **Memory #88**: Full implementation completion summary  
+- **Memory #88**: Full implementation completion summary
 - **Memory #63**: Original implementation status (outdated but useful for context)
 - **Memory #45**: Original architecture planning
 
@@ -263,11 +263,11 @@ All context tools are **fully functional** in the current monolithic files:
 #### **get_project_context**
 
 - Multi-level detail (basic/standard/comprehensive)
-- AI instruction hierarchy display  
+- AI instruction hierarchy display
 - Project statistics and health metrics
 - Memory/task integration with priority sorting
 
-#### **get_task_context**  
+#### **get_task_context**
 
 - Complete task metadata with visual indicators
 - Semantic search for related memories

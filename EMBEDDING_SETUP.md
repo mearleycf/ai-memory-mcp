@@ -91,14 +91,14 @@ node dist/index-with-embeddings.js
 
 ### **Results Include Similarity Scores**
 
-```
+```text
 Found 3 memories (semantic search):
 
 1. [87.3% match] ID: 45
 Title: OAuth Integration Debug Session
 Content: Spent 2 hours debugging authentication flow...
 
-2. [76.8% match] ID: 23  
+2. [76.8% match] ID: 23
 Title: JWT Token Validation Issues
 Content: Authentication middleware was failing...
 
@@ -113,11 +113,11 @@ Content: User login process had several bugs...
 
 ### **Search Parameters**
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `use_semantic` | boolean | `true` | Enable semantic search with embeddings |
-| `min_similarity` | number | `0.1` | Minimum similarity score (0.0-1.0) |
-| `limit` | number | `20` | Maximum number of results |
+| Parameter        | Type    | Default | Description                            |
+| ---------------- | ------- | ------- | -------------------------------------- |
+| `use_semantic`   | boolean | `true`  | Enable semantic search with embeddings |
+| `min_similarity` | number  | `0.1`   | Minimum similarity score (0.0-1.0)     |
+| `limit`          | number  | `20`    | Maximum number of results              |
 
 ### **Embedding Model Information**
 
@@ -194,14 +194,14 @@ npm run build
 
 ### **Common Issues**
 
-**1. Model Download Fails**
+1. Model Download Fails
 
 ```bash
 # Check internet connection and try again
 npm run generate-embeddings
 ```
 
-**2. Memory Issues During Batch Processing**
+2. Memory Issues During Batch Processing
 
 ```bash
 # Process in smaller batches (already implemented)
@@ -209,7 +209,7 @@ npm run generate-embeddings
 npm run generate-embeddings
 ```
 
-**3. No Semantic Results**
+3. No Semantic Results
 
 ```bash
 # Check if embeddings exist
@@ -298,7 +298,7 @@ npm run generate-embeddings-force
     "default": true
   },
   "min_similarity": {
-    "type": "number", 
+    "type": "number",
     "description": "Minimum similarity score for semantic search (0.0-1.0)",
     "default": 0.1
   }
@@ -325,9 +325,9 @@ npm run generate-embeddings-force
    ```javascript
    // Should find related content by meaning
    search_memories({
-     "query": "authentication problems",
-     "use_semantic": true
-   })
+     query: 'authentication problems',
+     use_semantic: true,
+   });
    ```
 
 2. **Test Keyword Fallback**:
@@ -335,9 +335,9 @@ npm run generate-embeddings-force
    ```javascript
    // Should work even with use_semantic: false
    search_memories({
-     "query": "auth debug",
-     "use_semantic": false
-   })
+     query: 'auth debug',
+     use_semantic: false,
+   });
    ```
 
 3. **Test New Content**:
@@ -345,9 +345,9 @@ npm run generate-embeddings-force
    ```javascript
    // New memories should get embeddings automatically
    store_memory({
-     "title": "API Rate Limiting Strategy", 
-     "content": "Implemented exponential backoff..."
-   })
+     title: 'API Rate Limiting Strategy',
+     content: 'Implemented exponential backoff...',
+   });
    ```
 
 4. **Check Statistics**:
@@ -363,7 +363,7 @@ npm run generate-embeddings-force
 After successful setup:
 
 1. **Monitor Performance**: Check search response times
-2. **Tune Similarity Thresholds**: Adjust `min_similarity` for your use case  
+2. **Tune Similarity Thresholds**: Adjust `min_similarity` for your use case
 3. **Content Quality**: Better titles/descriptions = better embeddings
 4. **Regular Maintenance**: Regenerate embeddings if content changes significantly
 

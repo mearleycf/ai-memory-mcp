@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "ai-memory": {
+      "command": "node",
+      "args": ["dist/index-with-context-tools.js"],
+      "cwd": "/Users/mikeearley/code/mcp_servers/ai-memory-mcp"
+    },
+    "mcpjungle": {
+      "url": "http://localhost:8080/mcp"
+    },
+    "MCP_DOCKER": {
+      "command": "docker",
+      "args": ["mcp", "gateway", "run"]
+    }
+  }
+}

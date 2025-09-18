@@ -10,16 +10,18 @@ Version 2.0 introduces a completely rewritten **normalized relational database**
 
 **Status**: Phase 3 Complete (56% extracted) - Memory and Task Services successfully extracted!
 
-This codebase is undergoing a **critical refactoring** to transform a 3,566-line monolithic file into a professional, maintainable component architecture. 
+This codebase is undergoing a **critical refactoring** to transform a 3,566-line monolithic file into a professional, maintainable component architecture.
 
 ### **Refactoring Progress**
+
 - ✅ **Phase 1**: Context Service extraction (24% complete)
-- ✅ **Phase 2**: AI Instructions Service extraction (8% complete)  
+- ✅ **Phase 2**: AI Instructions Service extraction (8% complete)
 - ✅ **Phase 3**: Memory and Task Service extraction (24% complete)
 - 🚧 **Phase 4**: Project and Category Service extraction (pending)
 - ⏳ **Phase 5**: Final cleanup and validation (pending)
 
 ### **Architecture Improvements**
+
 - **Service Layer**: Business logic extracted into dedicated services
 - **Handler Layer**: MCP tool handlers with proper validation
 - **Type Safety**: Comprehensive TypeScript interfaces
@@ -174,9 +176,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "ai-memory": {
       "command": "node",
-      "args": [
-        "/Users/mikeearley/code/mcp_servers/ai-memory-mcp/dist/index.js"
-      ],
+      "args": ["/Users/mikeearley/code/mcp_servers/ai-memory-mcp/dist/index.js"],
       "env": {}
     }
   }
@@ -191,11 +191,11 @@ Edit `%APPDATA%/Claude/claude_desktop_config.json` with the appropriate path.
 
 Once configured, the following tools will be available in Claude:
 
-### Memory Management
+### Memory Management Usage
 
 #### Storing Memories
 
-```
+```text
 Store a memory about my coding preferences:
 Title: "Coding Style Preferences"
 Content: "I prefer TypeScript over JavaScript, use functional programming patterns, and follow clean code principles. I like using ESLint and Prettier for code formatting."
@@ -207,7 +207,7 @@ Priority: 4
 
 #### Advanced Memory Queries
 
-```
+```text
 # Find memories by project
 List memories for project "e-commerce-platform"
 
@@ -218,11 +218,11 @@ List memories in category "technical" with priority >= 4
 Search memories for "authentication" in project "api-development"
 ```
 
-### Task Management
+### Task Management Usage
 
 #### Creating Tasks
 
-```
+```text
 Create a task:
 Title: "Implement user authentication"
 Description: "Add JWT-based authentication with password reset functionality"
@@ -236,7 +236,7 @@ Status: "not_started"
 
 #### Advanced Task Management
 
-```
+```text
 # List tasks by project
 List tasks for project "e-commerce-platform"
 
@@ -251,7 +251,7 @@ Get task statistics to see completion rates by project
 
 #### Managing Projects
 
-```
+```text
 # Create a new project
 Create project:
 Name: "Mobile App Redesign"
@@ -272,7 +272,7 @@ Update project 5 with new description and color
 
 #### Managing Categories
 
-```
+```text
 # Create a new category
 Create category:
 Name: "research"
@@ -469,4 +469,4 @@ MIT License - feel free to modify and distribute as needed.
 4. **Test**: Create a memory with category and project
 5. **Explore**: Use `list_projects` and `list_categories` to see your data organization
 
-**Your AI assistant now has enterprise-grade persistent memory and task management! 🎉**
+Your AI assistant now has enterprise-grade persistent memory and task management! 🎉

@@ -15,8 +15,8 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { AIInstructionService } from '../services/ai-instruction-service.js';
 import { 
   createErrorResponse, 
-  validateId,
-  validateRequiredString,
+  safeValidateId,
+  safeValidateRequiredString,
   handleAsyncError 
 } from '../utils/error-handling.js';
 
@@ -26,7 +26,7 @@ import {
 export const aiInstructionTools: Tool[] = [
   {
     name: 'create_ai_instruction',
-    description: 'Create a new AI instruction',
+    description: 'Create a new AI instruction with scope-based targeting',
     inputSchema: {
       type: 'object',
       properties: {
@@ -38,9 +38,14 @@ export const aiInstructionTools: Tool[] = [
           type: 'string',
           description: 'Content of the AI instruction',
         },
-        category: {
+        scope: {
           type: 'string',
-          description: 'Category for the instruction',
+          enum: ['global', 'project', 'category'],
+          description: 'Scope of the instruction: global, project, or category',
+        },
+        target_name: {
+          type: 'string',
+          description: 'Target project or category name (required for project/category scope)',
         },
         priority: {
           type: 'number',
@@ -48,45 +53,53 @@ export const aiInstructionTools: Tool[] = [
           default: 1,
         },
       },
-      required: ['title', 'content'],
+      required: ['title', 'content', 'scope'],
     },
   },
   {
     name: 'list_ai_instructions',
-    description: 'List all AI instructions',
+    description: 'List AI instructions with optional filtering by scope, project, or category',
     inputSchema: {
       type: 'object',
       properties: {
+        scope: {
+          type: 'string',
+          enum: ['global', 'project', 'category'],
+          description: 'Filter by scope',
+        },
+        project: {
+          type: 'string',
+          description: 'Filter by project name',
+        },
         category: {
           type: 'string',
-          description: 'Filter by category',
+          description: 'Filter by category name',
         },
-        limit: {
+        priority_min: {
           type: 'number',
-          description: 'Maximum number of instructions to return',
-          default: 50,
+          description: 'Minimum priority level',
         },
       },
     },
   },
   {
     name: 'get_ai_instructions',
-    description: 'Get AI instructions by category or search query',
+    description: 'Get applicable AI instructions for a specific context (project, category, or global)',
     inputSchema: {
       type: 'object',
       properties: {
+        project: {
+          type: 'string',
+          description: 'Project name to get instructions for',
+        },
         category: {
           type: 'string',
-          description: 'Category to filter by',
+          description: 'Category name to get instructions for',
         },
-        query: {
-          type: 'string',
-          description: 'Search query',
-        },
-        limit: {
-          type: 'number',
-          description: 'Maximum number of instructions to return',
-          default: 20,
+        include_global: {
+          type: 'boolean',
+          description: 'Include global instructions (default: true)',
+          default: true,
         },
       },
     },
@@ -108,10 +121,6 @@ export const aiInstructionTools: Tool[] = [
         content: {
           type: 'string',
           description: 'New content',
-        },
-        category: {
-          type: 'string',
-          description: 'New category',
         },
         priority: {
           type: 'number',
@@ -143,16 +152,28 @@ export const aiInstructionTools: Tool[] = [
 export function createAIInstructionHandlers(aiInstructionService: AIInstructionService) {
   return {
     async create_ai_instruction(args: any) {
+      console.log('[AI Instruction Handler] create_ai_instruction called with args:', JSON.stringify(args, null, 2));
+      console.log('[AI Instruction Handler] aiInstructionService:', aiInstructionService);
+      console.log('[AI Instruction Handler] aiInstructionService type:', typeof aiInstructionService);
+      
       return handleAsyncError(async () => {
-        try {
-          validateRequiredString(args.title, 'Title');
-          validateRequiredString(args.content, 'Content');
-        } catch (error) {
-          return createErrorResponse(error as Error);
+        console.log('[AI Instruction Handler] Inside handleAsyncError');
+        
+        const titleValidation = safeValidateRequiredString(args.title, 'Title');
+        if (titleValidation.isError) {
+          console.log('[AI Instruction Handler] Title validation failed:', titleValidation.message);
+          return createErrorResponse(titleValidation.message!);
         }
 
+        const contentValidation = safeValidateRequiredString(args.content, 'Content');
+        if (contentValidation.isError) {
+          console.log('[AI Instruction Handler] Content validation failed:', contentValidation.message);
+          return createErrorResponse(contentValidation.message!);
+        }
+
+        console.log('[AI Instruction Handler] About to call aiInstructionService.createAIInstruction');
         return await aiInstructionService.createAIInstruction(args);
-      });
+      }, 'create_ai_instruction');
     },
 
     async list_ai_instructions(args: any) {
@@ -169,10 +190,9 @@ export function createAIInstructionHandlers(aiInstructionService: AIInstructionS
 
     async update_ai_instruction(args: any) {
       return handleAsyncError(async () => {
-        try {
-          validateId(args.id, 'AI instruction');
-        } catch (error) {
-          return createErrorResponse(error as Error);
+        const idValidation = safeValidateId(args.id, 'AI instruction');
+        if (idValidation.isError) {
+          return createErrorResponse(idValidation.message!);
         }
 
         return await aiInstructionService.updateAIInstruction(args);
@@ -181,10 +201,9 @@ export function createAIInstructionHandlers(aiInstructionService: AIInstructionS
 
     async delete_ai_instruction(args: any) {
       return handleAsyncError(async () => {
-        try {
-          validateId(args.id, 'AI instruction');
-        } catch (error) {
-          return createErrorResponse(error as Error);
+        const idValidation = safeValidateId(args.id, 'AI instruction');
+        if (idValidation.isError) {
+          return createErrorResponse(idValidation.message!);
         }
 
         return await aiInstructionService.deleteAIInstruction(args);

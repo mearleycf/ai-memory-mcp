@@ -222,6 +222,12 @@ export async function handleAsyncError<T>(
   try {
     return await operation();
   } catch (error) {
+    console.error(`[Error Handler] ${errorContext || 'Unknown context'}:`, error);
+    console.error(`[Error Handler] Error type:`, typeof error);
+    console.error(`[Error Handler] Error constructor:`, error?.constructor?.name);
+    console.error(`[Error Handler] Error message:`, (error as Error)?.message);
+    console.error(`[Error Handler] Error stack:`, (error as Error)?.stack);
+    
     if (errorContext) {
       logError(error as Error, { context: errorContext });
     } else {

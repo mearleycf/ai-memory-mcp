@@ -54,6 +54,18 @@ export class AIInstructionServiceImpl implements AIInstructionService {
    */
   async createAIInstruction(args: CreateAIInstructionArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
+      console.log('[AI Instruction Service] createAIInstruction called with args:', JSON.stringify(args, null, 2));
+      console.log('[AI Instruction Service] Database manager type:', typeof this.db);
+      console.log('[AI Instruction Service] Database manager keys:', Object.keys(this.db));
+      console.log('[AI Instruction Service] Database methods available:', {
+        run: typeof this.db.run,
+        get: typeof this.db.get,
+        all: typeof this.db.all,
+        dbRun: typeof (this.db as any).dbRun,
+        dbGet: typeof (this.db as any).dbGet,
+        dbAll: typeof (this.db as any).dbAll
+      });
+      
       const { title, content, scope, target_name, priority = 1 } = args;
 
       // Validate required fields
@@ -81,7 +93,7 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
       // Resolve target ID for project/category scopes
       if (scope === 'project' && target_name) {
-        const project = await this.db.dbGet(
+        const project = await this.db.get(
           'SELECT id FROM projects WHERE name = ?', 
           [target_name.toLowerCase()]
         );
@@ -90,7 +102,7 @@ export class AIInstructionServiceImpl implements AIInstructionService {
         }
         target_id = project.id;
       } else if (scope === 'category' && target_name) {
-        const category = await this.db.dbGet(
+        const category = await this.db.get(
           'SELECT id FROM categories WHERE name = ?', 
           [target_name.toLowerCase()]
         );
@@ -101,10 +113,22 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       }
 
       // Create the AI instruction
-      const result = await this.db.dbRun(
-        'INSERT INTO ai_instructions (title, content, scope, target_id, priority) VALUES (?, ?, ?, ?, ?)',
-        [title.trim(), content.trim(), scope, target_id, priority]
-      );
+      console.log('[AI Instruction Service] About to call this.db.run with params:', [title.trim(), content.trim(), scope, target_id, priority]);
+      console.log('[AI Instruction Service] this.db.run function:', this.db.run);
+      console.log('[AI Instruction Service] this.db.run type:', typeof this.db.run);
+      
+      let result;
+      try {
+        result = await this.db.run(
+          'INSERT INTO ai_instructions (title, content, scope, target_id, priority) VALUES (?, ?, ?, ?, ?)',
+          [title.trim(), content.trim(), scope, target_id, priority]
+        );
+        console.log('[AI Instruction Service] Database insert successful, result:', result);
+      } catch (dbError) {
+        console.error('[AI Instruction Service] Database error:', dbError);
+        console.error('[AI Instruction Service] Database error stack:', (dbError as Error).stack);
+        throw dbError;
+      }
 
       return {
         content: [{
@@ -161,7 +185,7 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
       sql += ` ORDER BY ai.priority DESC, ai.created_at DESC`;
 
-      const instructions = await this.db.dbAll(sql, params);
+      const instructions = await this.db.all(sql, params);
 
       if (instructions.length === 0) {
         return {
@@ -233,7 +257,7 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
       sql += ` ORDER BY ai.priority DESC, ai.created_at DESC`;
 
-      const instructions = await this.db.dbAll(sql, params);
+      const instructions = await this.db.all(sql, params);
 
       if (instructions.length === 0) {
         return {
@@ -308,7 +332,7 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       params.push(id);
 
       // Execute update
-      const result = await this.db.dbRun(
+      const result = await this.db.run(
         `UPDATE ai_instructions SET ${updates.join(', ')} WHERE id = ?`,
         params
       );
@@ -342,7 +366,7 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       }
 
       // Execute deletion
-      const result = await this.db.dbRun(
+      const result = await this.db.run(
         'DELETE FROM ai_instructions WHERE id = ?', 
         [id]
       );

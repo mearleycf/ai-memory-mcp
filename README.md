@@ -176,7 +176,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "ai-memory": {
       "command": "node",
-      "args": ["/Users/mikeearley/code/mcp_servers/ai-memory-mcp/dist/index.js"],
+      "args": ["/Users/mikeearley/code/mcp_servers/ai-memory-mcp/dist/index-with-context-tools.js"],
       "env": {}
     }
   }

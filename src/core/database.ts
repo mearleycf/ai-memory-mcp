@@ -1,18 +1,18 @@
 /**
  * Database Core Module
- * 
+ *
  * Handles database connection, initialization, and provides
  * promisified database operations for the AI Memory MCP Server.
  */
 
-import * as sqlite3 from 'sqlite3';
+import sqlite3 from 'sqlite3';
 import * as path from 'path';
 import * as os from 'os';
 import { DatabaseResult, DatabaseOperations } from '../core/types.js';
 
 /**
  * Database Manager Class
- * 
+ *
  * Manages SQLite database connection and provides promisified
  * database operations with proper error handling.
  */
@@ -23,9 +23,15 @@ export class DatabaseManager implements DatabaseOperations {
   public dbAll!: (sql: string, params?: any[]) => Promise<any[]>;
 
   // Convenience methods that match the interface expected by services
-  get run() { return this.dbRun; }
-  get get() { return this.dbGet; }
-  get all() { return this.dbAll; }
+  get run() {
+    return this.dbRun;
+  }
+  get get() {
+    return this.dbGet;
+  }
+  get all() {
+    return this.dbAll;
+  }
 
   /**
    * Initialize database connection and setup
@@ -41,11 +47,11 @@ export class DatabaseManager implements DatabaseOperations {
   private async setupDatabase(): Promise<void> {
     const dbPath = path.join(os.homedir(), '.ai-memory.db');
     this.db = new sqlite3.Database(dbPath);
-    
+
     // Create proper promisified database methods that preserve context
     this.dbRun = (sql: string, params: any[] = []) => {
       return new Promise<DatabaseResult>((resolve, reject) => {
-        this.db.run(sql, params, function(err) {
+        this.db.run(sql, params, function (err) {
           if (err) {
             reject(err);
           } else {
@@ -54,7 +60,7 @@ export class DatabaseManager implements DatabaseOperations {
         });
       });
     };
-    
+
     this.dbGet = (sql: string, params: any[] = []) => {
       return new Promise<any>((resolve, reject) => {
         this.db.get(sql, params, (err, row) => {
@@ -66,7 +72,7 @@ export class DatabaseManager implements DatabaseOperations {
         });
       });
     };
-    
+
     this.dbAll = (sql: string, params: any[] = []) => {
       return new Promise<any[]>((resolve, reject) => {
         this.db.all(sql, params, (err, rows) => {
@@ -161,7 +167,7 @@ export class DatabaseManager implements DatabaseOperations {
       )
     `);
 
-    // Tasks table with embedding support  
+    // Tasks table with embedding support
     await this.dbRun(`
       CREATE TABLE IF NOT EXISTS tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -220,11 +226,36 @@ export class DatabaseManager implements DatabaseOperations {
    */
   private async ensureDefaultStatuses(): Promise<void> {
     const defaultStatuses = [
-      { name: 'not_started', description: 'Task has not been started yet', is_completed_status: false, sort_order: 1 },
-      { name: 'in_progress', description: 'Task is currently being worked on', is_completed_status: false, sort_order: 2 },
-      { name: 'completed', description: 'Task has been completed successfully', is_completed_status: true, sort_order: 3 },
-      { name: 'cancelled', description: 'Task has been cancelled and will not be completed', is_completed_status: false, sort_order: 4 },
-      { name: 'on_hold', description: 'Task is temporarily paused', is_completed_status: false, sort_order: 5 },
+      {
+        name: 'not_started',
+        description: 'Task has not been started yet',
+        is_completed_status: false,
+        sort_order: 1,
+      },
+      {
+        name: 'in_progress',
+        description: 'Task is currently being worked on',
+        is_completed_status: false,
+        sort_order: 2,
+      },
+      {
+        name: 'completed',
+        description: 'Task has been completed successfully',
+        is_completed_status: true,
+        sort_order: 3,
+      },
+      {
+        name: 'cancelled',
+        description: 'Task has been cancelled and will not be completed',
+        is_completed_status: false,
+        sort_order: 4,
+      },
+      {
+        name: 'on_hold',
+        description: 'Task is temporarily paused',
+        is_completed_status: false,
+        sort_order: 5,
+      },
     ];
 
     for (const status of defaultStatuses) {
@@ -254,8 +285,11 @@ export class DatabaseManager implements DatabaseOperations {
           priority INTEGER DEFAULT 1,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (target_id) REFERENCES projects(id) ON DELETE CASCADE,
-          FOREIGN KEY (target_id) REFERENCES categories(id) ON DELETE CASCADE
+          CHECK (
+            (scope = 'global' AND target_id IS NULL) OR
+            (scope = 'project' AND target_id IS NOT NULL) OR
+            (scope = 'category' AND target_id IS NOT NULL)
+          )
         )
       `);
     } catch (error) {
@@ -273,7 +307,7 @@ export class DatabaseManager implements DatabaseOperations {
       'CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_id)',
       'CREATE INDEX IF NOT EXISTS idx_memories_priority ON memories(priority)',
       'CREATE INDEX IF NOT EXISTS idx_memories_updated ON memories(updated_at)',
-      
+
       // Task indexes
       'CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status_id)',
       'CREATE INDEX IF NOT EXISTS idx_tasks_category ON tasks(category_id)',
@@ -282,12 +316,12 @@ export class DatabaseManager implements DatabaseOperations {
       'CREATE INDEX IF NOT EXISTS idx_tasks_due_date ON tasks(due_date)',
       'CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks(archived)',
       'CREATE INDEX IF NOT EXISTS idx_tasks_updated ON tasks(updated_at)',
-      
+
       // AI Instructions indexes
       'CREATE INDEX IF NOT EXISTS idx_ai_instructions_scope ON ai_instructions(scope)',
       'CREATE INDEX IF NOT EXISTS idx_ai_instructions_target ON ai_instructions(target_id)',
       'CREATE INDEX IF NOT EXISTS idx_ai_instructions_priority ON ai_instructions(priority)',
-      
+
       // Junction table indexes
       'CREATE INDEX IF NOT EXISTS idx_memory_tags_memory ON memory_tags(memory_id)',
       'CREATE INDEX IF NOT EXISTS idx_memory_tags_tag ON memory_tags(tag_id)',
@@ -310,7 +344,7 @@ export class DatabaseManager implements DatabaseOperations {
   async close(): Promise<void> {
     if (this.db) {
       return new Promise<void>((resolve, reject) => {
-        this.db.close((err) => {
+        this.db.close(err => {
           if (err) {
             reject(err);
           } else {
@@ -339,7 +373,8 @@ export class DatabaseManager implements DatabaseOperations {
    * Get task with relations
    */
   async getTaskWithRelations(taskId: number): Promise<any> {
-    return this.dbGet(`
+    return this.dbGet(
+      `
       SELECT 
         t.*,
         s.name as status,
@@ -354,7 +389,9 @@ export class DatabaseManager implements DatabaseOperations {
       LEFT JOIN tags tag ON tt.tag_id = tag.id
       WHERE t.id = ?
       GROUP BY t.id
-    `, [taskId]);
+    `,
+      [taskId]
+    );
   }
 
   /**
@@ -383,21 +420,21 @@ export class DatabaseHelpers {
    */
   async ensureCategory(categoryName: string): Promise<number | null> {
     if (!categoryName || categoryName.trim() === '') return null;
-    
+
     const normalized = categoryName.toLowerCase().trim();
-    
+
     // Try to find existing category
     const existing = await this.db.dbGet('SELECT id FROM categories WHERE name = ?', [normalized]);
     if (existing) {
       return existing.id;
     }
-    
+
     // Create new category
-    const result = await this.db.dbRun(
-      'INSERT INTO categories (name, description) VALUES (?, ?)',
-      [normalized, 'Auto-created category']
-    );
-    
+    const result = await this.db.dbRun('INSERT INTO categories (name, description) VALUES (?, ?)', [
+      normalized,
+      'Auto-created category',
+    ]);
+
     return result.lastID || null;
   }
 
@@ -406,21 +443,21 @@ export class DatabaseHelpers {
    */
   async ensureProject(projectName: string): Promise<number | null> {
     if (!projectName || projectName.trim() === '') return null;
-    
+
     const normalized = projectName.toLowerCase().trim();
-    
+
     // Try to find existing project
     const existing = await this.db.dbGet('SELECT id FROM projects WHERE name = ?', [normalized]);
     if (existing) {
       return existing.id;
     }
-    
+
     // Create new project
-    const result = await this.db.dbRun(
-      'INSERT INTO projects (name, description) VALUES (?, ?)',
-      [normalized, 'Auto-created project']
-    );
-    
+    const result = await this.db.dbRun('INSERT INTO projects (name, description) VALUES (?, ?)', [
+      normalized,
+      'Auto-created project',
+    ]);
+
     return result.lastID || null;
   }
 
@@ -429,7 +466,7 @@ export class DatabaseHelpers {
    */
   async ensureStatus(statusName: string): Promise<number | null> {
     if (!statusName) return null;
-    
+
     const normalized = statusName.toLowerCase().trim();
     const status = await this.db.dbGet('SELECT id FROM statuses WHERE name = ?', [normalized]);
     return status ? status.id : null;
@@ -440,29 +477,29 @@ export class DatabaseHelpers {
    */
   async ensureTags(tagString: string): Promise<number[]> {
     if (!tagString || tagString.trim() === '') return [];
-    
+
     const tagNames = tagString
       .split(',')
       .map(tag => tag.trim().toLowerCase())
       .filter(tag => tag.length > 0);
-    
+
     const tagIds: number[] = [];
-    
+
     for (const tagName of tagNames) {
       // Try to find existing tag
       let existing = await this.db.dbGet('SELECT id FROM tags WHERE name = ?', [tagName]);
-      
+
       if (!existing) {
         // Create new tag
         const result = await this.db.dbRun('INSERT INTO tags (name) VALUES (?)', [tagName]);
         existing = { id: result.lastID };
       }
-      
+
       if (existing && existing.id) {
         tagIds.push(existing.id);
       }
     }
-    
+
     return tagIds;
   }
 
@@ -472,13 +509,13 @@ export class DatabaseHelpers {
   async updateMemoryTags(memoryId: number, tagIds: number[]): Promise<void> {
     // Remove existing tags
     await this.db.dbRun('DELETE FROM memory_tags WHERE memory_id = ?', [memoryId]);
-    
+
     // Add new tags
     for (const tagId of tagIds) {
-      await this.db.dbRun(
-        'INSERT INTO memory_tags (memory_id, tag_id) VALUES (?, ?)',
-        [memoryId, tagId]
-      );
+      await this.db.dbRun('INSERT INTO memory_tags (memory_id, tag_id) VALUES (?, ?)', [
+        memoryId,
+        tagId,
+      ]);
     }
   }
 
@@ -488,13 +525,10 @@ export class DatabaseHelpers {
   async updateTaskTags(taskId: number, tagIds: number[]): Promise<void> {
     // Remove existing tags
     await this.db.dbRun('DELETE FROM task_tags WHERE task_id = ?', [taskId]);
-    
+
     // Add new tags
     for (const tagId of tagIds) {
-      await this.db.dbRun(
-        'INSERT INTO task_tags (task_id, tag_id) VALUES (?, ?)',
-        [taskId, tagId]
-      );
+      await this.db.dbRun('INSERT INTO task_tags (task_id, tag_id) VALUES (?, ?)', [taskId, tagId]);
     }
   }
 }

@@ -155,7 +155,11 @@ class AIMemoryServer {
       }
     );
 
-    this.setupDatabase();
+    this.initialize();
+  }
+
+  private async initialize() {
+    await this.setupDatabase();
     this.setupToolHandlers();
     this.setupErrorHandling();
   }

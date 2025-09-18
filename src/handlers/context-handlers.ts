@@ -24,19 +24,16 @@ import {
 export const contextTools: Tool[] = [
   {
     name: 'get_project_context',
-    description: 'Get comprehensive context for a project including tasks, memories, and priorities',
+    description: 'Get comprehensive context for a specific project including memories, tasks, and AI instructions',
     inputSchema: {
       type: 'object',
       properties: {
-        project_id: {
-          type: 'number',
-          description: 'Project ID to get context for',
-        },
-        project_name: {
-          type: 'string',
-          description: 'Project name to get context for',
-        },
+        project: { type: 'string', description: 'Project name to get context for' },
+        level: { type: 'string', description: 'Context level: basic, standard, comprehensive', default: 'standard' },
+        include_completed: { type: 'boolean', description: 'Include completed tasks', default: false },
+        max_items: { type: 'number', description: 'Maximum items to return per type', default: 10 },
       },
+      required: ['project'],
     },
   },
   {

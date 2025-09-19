@@ -391,7 +391,10 @@ export class TaskServiceImpl implements TaskService {
       }
 
       // Check if task exists
-      const existing = await this.db.get('SELECT * FROM tasks WHERE id = ?', [id]);
+      const existing = await this.db.client.task.findUnique({
+        where: { id },
+        include: { status: true },
+      });
       if (!existing) {
         throw createNotFoundError(`Task with ID ${id} not found`);
       }
@@ -401,81 +404,95 @@ export class TaskServiceImpl implements TaskService {
         throw createValidationError('Invalid due date format. Use YYYY-MM-DD');
       }
 
-      // Build update query dynamically
-      const updates: string[] = [];
-      const params: any[] = [];
+      // Build update data
+      const updateData: any = {};
 
       if (title !== undefined) {
-        updates.push('title = ?');
-        params.push(title);
+        updateData.title = title;
       }
 
       if (description !== undefined) {
-        updates.push('description = ?');
-        params.push(description);
+        updateData.description = description;
       }
 
       if (status !== undefined) {
         const statusId = await this.ensureStatus(status);
-        updates.push('status_id = ?');
-        params.push(statusId);
+        updateData.statusId = statusId;
 
         // Set completed_at if status is completed
         if (status === 'completed') {
-          updates.push('completed_at = CURRENT_TIMESTAMP');
-        } else if (existing.status_id !== statusId) {
+          updateData.completedAt = new Date();
+        } else if (existing.status.name !== status) {
           // Clear completed_at if status changed from completed
-          updates.push('completed_at = NULL');
+          updateData.completedAt = null;
         }
       }
 
       if (category !== undefined) {
         const categoryId = await this.ensureCategory(category);
-        updates.push('category_id = ?');
-        params.push(categoryId);
+        updateData.categoryId = categoryId;
       }
 
       if (project !== undefined) {
         if (project) {
           const projectId = await this.ensureProject(project);
-          updates.push('project_id = ?');
-          params.push(projectId);
+          updateData.projectId = projectId;
         } else {
-          updates.push('project_id = NULL');
+          updateData.projectId = null;
         }
       }
 
       if (priority !== undefined) {
-        updates.push('priority = ?');
-        params.push(priority);
+        updateData.priority = priority;
       }
 
       if (due_date !== undefined) {
-        updates.push('due_date = ?');
-        params.push(due_date);
+        updateData.dueDate = due_date ? new Date(due_date) : null;
       }
 
-      if (updates.length === 0) {
+      if (Object.keys(updateData).length === 0) {
         throw createValidationError('At least one field must be provided for update');
       }
 
-      updates.push('updated_at = CURRENT_TIMESTAMP');
-      params.push(id);
+      // Update task in a transaction
+      const updatedTask = await this.db.client.$transaction(async prisma => {
+        const task = await prisma.task.update({
+          where: { id },
+          data: updateData,
+          include: {
+            status: true,
+            category: true,
+            project: true,
+            taskTags: {
+              include: {
+                tag: true,
+              },
+            },
+          },
+        });
 
-      await this.db.run(
-        `
-        UPDATE tasks 
-        SET ${updates.join(', ')}
-        WHERE id = ?
-      `,
-        params
-      );
+        // Update tags if provided
+        if (tags !== undefined) {
+          const tagIds = await this.ensureTags(tags);
 
-      // Update tags if provided
-      if (tags !== undefined) {
-        const tagIds = await this.ensureTags(tags);
-        await this.updateTaskTags(id, tagIds);
-      }
+          // Remove existing tags
+          await prisma.taskTag.deleteMany({
+            where: { taskId: id },
+          });
+
+          // Add new tags
+          if (tagIds.length > 0) {
+            await prisma.taskTag.createMany({
+              data: tagIds.map(tagId => ({
+                taskId: id,
+                tagId,
+              })),
+            });
+          }
+        }
+
+        return task;
+      });
 
       // Regenerate embedding if content changed
       if (title !== undefined || description !== undefined) {
@@ -486,23 +503,30 @@ export class TaskServiceImpl implements TaskService {
             `${finalTitle}: ${finalDescription}`
           );
 
-          await this.db.run(
-            `
-            UPDATE tasks 
-            SET embedding = ?, embedding_model = ?, embedding_created_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `,
-            [JSON.stringify(embedding), embeddingService.getModelName(), id]
-          );
+          await this.db.client.task.update({
+            where: { id },
+            data: {
+              embedding: JSON.stringify(embedding),
+              embeddingModel: embeddingService.getModelName(),
+              embeddingCreatedAt: new Date(),
+            },
+          });
         } catch (embeddingError) {
           console.warn(`Failed to regenerate embedding for task ${id}:`, embeddingError);
         }
       }
 
-      // Get the updated task with relations
-      const updatedTask = await this.getTaskWithRelations(id);
+      // Format the response
+      const formattedTask = {
+        ...updatedTask,
+        tags: updatedTask.taskTags.map(tt => tt.tag.name),
+        is_overdue:
+          updatedTask.dueDate &&
+          new Date(updatedTask.dueDate) < new Date() &&
+          updatedTask.status.name !== 'completed',
+      };
 
-      return createMCPResponse(updatedTask, `Task "${updatedTask!.title}" updated successfully`);
+      return createMCPResponse(formattedTask, `Task "${updatedTask.title}" updated successfully`);
     });
   }
 
@@ -729,40 +753,40 @@ export class TaskServiceImpl implements TaskService {
    * Get task with all relations (status, category, project, tags)
    */
   private async getTaskWithRelations(taskId: number): Promise<Task | null> {
-    const task = await this.db.get(
-      `
-      SELECT 
-        t.*,
-        s.name as status,
-        c.name as category,
-        p.name as project
-      FROM tasks t
-      LEFT JOIN statuses s ON t.status_id = s.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN projects p ON t.project_id = p.id
-      WHERE t.id = ?
-    `,
-      [taskId]
-    );
+    const task = await this.db.client.task.findUnique({
+      where: { id: taskId },
+      include: {
+        status: true,
+        category: true,
+        project: true,
+        taskTags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
+    });
 
     if (!task) {
       return null;
     }
 
-    // Get tags
-    const tags = await this.db.all(
-      `
-      SELECT t.name 
-      FROM task_tags tt
-      JOIN tags t ON tt.tag_id = t.id
-      WHERE tt.task_id = ?
-    `,
-      [taskId]
-    );
-
     return {
-      ...task,
-      tags: tags.map(tag => tag.name),
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      status_id: task.statusId,
+      category_id: task.categoryId || undefined,
+      project_id: task.projectId || undefined,
+      priority: task.priority,
+      due_date: task.dueDate?.toISOString().split('T')[0],
+      created_at: task.createdAt.toISOString(),
+      updated_at: task.updatedAt.toISOString(),
+      completed_at: task.completedAt?.toISOString(),
+      archived: task.archived,
+      embedding: task.embedding || undefined,
+      embedding_model: task.embeddingModel || undefined,
+      embedding_created_at: task.embeddingCreatedAt?.toISOString(),
     };
   }
 
@@ -771,11 +795,18 @@ export class TaskServiceImpl implements TaskService {
    */
   private async updateTaskTags(taskId: number, tagIds: number[]): Promise<void> {
     // Remove existing tags
-    await this.db.run('DELETE FROM task_tags WHERE task_id = ?', [taskId]);
+    await this.db.client.taskTag.deleteMany({
+      where: { taskId },
+    });
 
     // Add new tags
-    for (const tagId of tagIds) {
-      await this.db.run('INSERT INTO task_tags (task_id, tag_id) VALUES (?, ?)', [taskId, tagId]);
+    if (tagIds.length > 0) {
+      await this.db.client.taskTag.createMany({
+        data: tagIds.map(tagId => ({
+          taskId,
+          tagId,
+        })),
+      });
     }
   }
 
@@ -783,20 +814,22 @@ export class TaskServiceImpl implements TaskService {
    * Ensure status exists and return its ID
    */
   private async ensureStatus(statusName: string): Promise<number> {
-    let status = await this.db.get('SELECT id FROM statuses WHERE name = ?', [statusName]);
+    let status = await this.db.client.status.findUnique({
+      where: { name: statusName.toLowerCase() },
+    });
 
     if (!status) {
       const sortOrder = this.getStatusSortOrder(statusName);
       const isCompleted = statusName === 'completed';
 
-      const result = await this.db.run(
-        `
-        INSERT INTO statuses (name, description, is_completed_status, sort_order, created_at)
-        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-      `,
-        [statusName, `Auto-created status: ${statusName}`, isCompleted, sortOrder]
-      );
-      return result.lastID!;
+      status = await this.db.client.status.create({
+        data: {
+          name: statusName.toLowerCase(),
+          description: `Auto-created status: ${statusName}`,
+          isCompletedStatus: isCompleted,
+          sortOrder,
+        },
+      });
     }
 
     return status.id;
@@ -820,17 +853,17 @@ export class TaskServiceImpl implements TaskService {
    * Ensure category exists and return its ID
    */
   private async ensureCategory(categoryName: string): Promise<number> {
-    let category = await this.db.get('SELECT id FROM categories WHERE name = ?', [categoryName]);
+    let category = await this.db.client.category.findUnique({
+      where: { name: categoryName.toLowerCase() },
+    });
 
     if (!category) {
-      const result = await this.db.run(
-        `
-        INSERT INTO categories (name, description, created_at, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `,
-        [categoryName, `Auto-created category: ${categoryName}`]
-      );
-      return result.lastID!;
+      category = await this.db.client.category.create({
+        data: {
+          name: categoryName.toLowerCase(),
+          description: `Auto-created category: ${categoryName}`,
+        },
+      });
     }
 
     return category.id;
@@ -840,17 +873,17 @@ export class TaskServiceImpl implements TaskService {
    * Ensure project exists and return its ID
    */
   private async ensureProject(projectName: string): Promise<number> {
-    let project = await this.db.get('SELECT id FROM projects WHERE name = ?', [projectName]);
+    let project = await this.db.client.project.findUnique({
+      where: { name: projectName.toLowerCase() },
+    });
 
     if (!project) {
-      const result = await this.db.run(
-        `
-        INSERT INTO projects (name, description, created_at, updated_at)
-        VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `,
-        [projectName, `Auto-created project: ${projectName}`]
-      );
-      return result.lastID!;
+      project = await this.db.client.project.create({
+        data: {
+          name: projectName.toLowerCase(),
+          description: `Auto-created project: ${projectName}`,
+        },
+      });
     }
 
     return project.id;
@@ -869,20 +902,18 @@ export class TaskServiceImpl implements TaskService {
     const tagIds: number[] = [];
 
     for (const tagName of tagNames) {
-      let tag = await this.db.get('SELECT id FROM tags WHERE name = ?', [tagName]);
+      let tag = await this.db.client.tag.findUnique({
+        where: { name: tagName.toLowerCase() },
+      });
 
       if (!tag) {
-        const result = await this.db.run(
-          `
-          INSERT INTO tags (name, created_at)
-          VALUES (?, CURRENT_TIMESTAMP)
-        `,
-          [tagName]
-        );
-        tagIds.push(result.lastID!);
-      } else {
-        tagIds.push(tag.id);
+        tag = await this.db.client.tag.create({
+          data: {
+            name: tagName.toLowerCase(),
+          },
+        });
       }
+      tagIds.push(tag.id);
     }
 
     return tagIds;

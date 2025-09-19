@@ -74,21 +74,23 @@ export class CategoryServiceImpl implements CategoryService {
       }
 
       try {
-        const result = await this.db.run(
-          'INSERT INTO categories (name, description) VALUES (?, ?)',
-          [name.toLowerCase().trim(), description]
-        );
+        const result = await this.db.client.category.create({
+          data: {
+            name: name.toLowerCase().trim(),
+            description,
+          },
+        });
 
         return {
           content: [
             {
               type: 'text',
-              text: `Category '${name}' created successfully with ID: ${result.lastID}`,
+              text: `Category '${name}' created successfully with ID: ${result.id}`,
             },
           ],
         };
       } catch (error: any) {
-        if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        if (error.code === 'P2002') {
           return {
             content: [
               {
@@ -115,13 +117,15 @@ export class CategoryServiceImpl implements CategoryService {
         throw createValidationError('Please provide either category ID or name');
       }
 
-      let category: Category | null = null;
+      let category: any = null;
       if (id) {
-        category = await this.db.get('SELECT * FROM categories WHERE id = ?', [id]);
+        category = await this.db.client.category.findUnique({
+          where: { id },
+        });
       } else if (name) {
-        category = await this.db.get('SELECT * FROM categories WHERE name = ?', [
-          name.toLowerCase().trim(),
-        ]);
+        category = await this.db.client.category.findFirst({
+          where: { name: name.toLowerCase().trim() },
+        });
       }
 
       if (!category) {
@@ -129,20 +133,23 @@ export class CategoryServiceImpl implements CategoryService {
       }
 
       // Get counts
-      const memoryCount = await this.db.get(
-        'SELECT COUNT(*) as count FROM memories WHERE category_id = ?',
-        [category.id]
-      );
-      const taskCount = await this.db.get(
-        'SELECT COUNT(*) as count FROM tasks WHERE category_id = ? AND archived = FALSE',
-        [category.id]
-      );
+      const [memoryCount, taskCount] = await Promise.all([
+        this.db.client.memory.count({
+          where: { categoryId: category.id },
+        }),
+        this.db.client.task.count({
+          where: {
+            categoryId: category.id,
+            archived: false,
+          },
+        }),
+      ]);
 
       return {
         content: [
           {
             type: 'text',
-            text: `📂 Category: ${category.name} (ID: ${category.id})\nDescription: ${category.description || 'No description'}\nMemories: ${memoryCount.count}\nActive Tasks: ${taskCount.count}\nCreated: ${category.created_at}\nUpdated: ${category.updated_at}`,
+            text: `📂 Category: ${category.name} (ID: ${category.id})\nDescription: ${category.description || 'No description'}\nMemories: ${memoryCount}\nActive Tasks: ${taskCount}\nCreated: ${category.createdAt}\nUpdated: ${category.updatedAt}`,
           },
         ],
       };
@@ -160,22 +167,19 @@ export class CategoryServiceImpl implements CategoryService {
         throw createValidationError('Category ID is required and must be a number');
       }
 
-      const updates = [];
-      const params = [];
+      const updateData: any = {};
 
       if (name !== undefined) {
         if (typeof name !== 'string' || name.trim().length === 0) {
           throw createValidationError('Category name must be a non-empty string');
         }
-        updates.push('name = ?');
-        params.push(name.toLowerCase().trim());
+        updateData.name = name.toLowerCase().trim();
       }
       if (description !== undefined) {
-        updates.push('description = ?');
-        params.push(description);
+        updateData.description = description;
       }
 
-      if (updates.length === 0) {
+      if (Object.keys(updateData).length === 0) {
         return {
           content: [
             {
@@ -186,18 +190,15 @@ export class CategoryServiceImpl implements CategoryService {
         };
       }
 
-      updates.push('updated_at = CURRENT_TIMESTAMP');
-      params.push(id);
+      updateData.updatedAt = new Date();
 
       try {
-        const result = await this.db.run(
-          `UPDATE categories SET ${updates.join(', ')} WHERE id = ?`,
-          params
-        );
+        const result = await this.db.client.category.update({
+          where: { id },
+          data: updateData,
+        });
 
-        if (result.changes === 0) {
-          throw createNotFoundError(`Category with ID ${id} not found`);
-        }
+        // Prisma update will throw if not found, so we don't need to check changes
 
         return {
           content: [
@@ -208,7 +209,7 @@ export class CategoryServiceImpl implements CategoryService {
           ],
         };
       } catch (error: any) {
-        if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        if (error.code === 'P2002') {
           return {
             content: [
               {
@@ -235,11 +236,11 @@ export class CategoryServiceImpl implements CategoryService {
         throw createValidationError('Category ID is required and must be a number');
       }
 
-      const result = await this.db.run('DELETE FROM categories WHERE id = ?', [id]);
+      const result = await this.db.client.category.delete({
+        where: { id },
+      });
 
-      if (result.changes === 0) {
-        throw createNotFoundError(`Category with ID ${id} not found`);
-      }
+      // Prisma delete will throw if not found, so we don't need to check changes
 
       return {
         content: [
@@ -257,35 +258,40 @@ export class CategoryServiceImpl implements CategoryService {
    */
   async listCategories(args: ListCategoriesArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
-      const categories = await this.db.all(`
-        SELECT 
-          c.id,
-          c.name,
-          c.description,
-          COALESCE(m.memory_count, 0) as memory_count,
-          COALESCE(t.task_count, 0) as task_count
-        FROM categories c
-        LEFT JOIN (
-          SELECT category_id, COUNT(*) as memory_count 
-          FROM memories 
-          WHERE category_id IS NOT NULL 
-          GROUP BY category_id
-        ) m ON c.id = m.category_id
-        LEFT JOIN (
-          SELECT category_id, COUNT(*) as task_count 
-          FROM tasks 
-          WHERE category_id IS NOT NULL AND archived = FALSE
-          GROUP BY category_id
-        ) t ON c.id = t.category_id
-        ORDER BY (COALESCE(m.memory_count, 0) + COALESCE(t.task_count, 0)) DESC
-      `);
+      const categories = await this.db.client.category.findMany({
+        include: {
+          _count: {
+            select: {
+              memories: true,
+              tasks: {
+                where: { archived: false },
+              },
+            },
+          },
+        },
+        orderBy: [
+          {
+            memories: {
+              _count: 'desc',
+            },
+          },
+          {
+            tasks: {
+              _count: 'desc',
+            },
+          },
+        ],
+      });
 
       return {
         content: [
           {
             type: 'text',
             text: `Categories:\n${categories
-              .map(cat => `${cat.name}: ${cat.memory_count} memories, ${cat.task_count} tasks`)
+              .map(
+                cat =>
+                  `${cat.name}: ${(cat as any)._count.memories} memories, ${(cat as any)._count.tasks} tasks`
+              )
               .join('\n')}`,
           },
         ],

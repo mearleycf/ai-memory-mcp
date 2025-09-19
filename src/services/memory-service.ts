@@ -238,47 +238,50 @@ export class MemoryServiceImpl implements MemoryService {
         throw createValidationError(`Invalid sort order: ${sort_order}`);
       }
 
-      let sql = `
-        SELECT 
-          m.*,
-          c.name as category,
-          p.name as project,
-          GROUP_CONCAT(t.name) as tags
-        FROM memories m
-        LEFT JOIN categories c ON m.category_id = c.id
-        LEFT JOIN projects p ON m.project_id = p.id
-        LEFT JOIN memory_tags mt ON m.id = mt.memory_id
-        LEFT JOIN tags t ON mt.tag_id = t.id
-        WHERE 1=1
-      `;
+      // Build where conditions
+      const where: any = {};
 
-      const params: any[] = [];
-
-      // Add filters
       if (category) {
-        sql += ` AND c.name = ?`;
-        params.push(category);
+        where.category = {
+          name: category.toLowerCase(),
+        };
       }
 
       if (project) {
-        sql += ` AND p.name = ?`;
-        params.push(project);
+        where.project = {
+          name: project.toLowerCase(),
+        };
       }
 
-      if (priority_min) {
-        sql += ` AND m.priority >= ?`;
-        params.push(priority_min);
+      if (priority_min !== undefined) {
+        where.priority = {
+          gte: priority_min,
+        };
       }
 
-      sql += ` GROUP BY m.id ORDER BY m.${sort_by} ${sort_order.toUpperCase()} LIMIT ?`;
-      params.push(limit);
+      // Build orderBy
+      const orderBy: any = {};
+      orderBy[sort_by] = sort_order.toLowerCase();
 
-      const memories = await this.db.all(sql, params);
+      const memories = await this.db.client.memory.findMany({
+        where,
+        include: {
+          category: true,
+          project: true,
+          memoryTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+        orderBy,
+        take: limit,
+      });
 
       // Format tags
       const formattedMemories = memories.map(memory => ({
         ...memory,
-        tags: memory.tags ? memory.tags.split(',') : [],
+        tags: memory.memoryTags.map(mt => mt.tag.name),
       }));
 
       return createMCPResponse(formattedMemories, `Retrieved ${formattedMemories.length} memories`);
@@ -296,13 +299,30 @@ export class MemoryServiceImpl implements MemoryService {
         throw createValidationError('Valid memory ID is required');
       }
 
-      const memory = await this.getMemoryWithRelations(id);
+      const memory = await this.db.client.memory.findUnique({
+        where: { id },
+        include: {
+          category: true,
+          project: true,
+          memoryTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+      });
 
       if (!memory) {
         throw createNotFoundError(`Memory with ID ${id} not found`);
       }
 
-      return createMCPResponse(memory, `Memory "${memory.title}" retrieved successfully`);
+      // Format tags
+      const formattedMemory = {
+        ...memory,
+        tags: memory.memoryTags.map(mt => mt.tag.name),
+      };
+
+      return createMCPResponse(formattedMemory, `Memory "${memory.title}" retrieved successfully`);
     });
   }
 
@@ -318,67 +338,78 @@ export class MemoryServiceImpl implements MemoryService {
       }
 
       // Check if memory exists
-      const existing = await this.db.get('SELECT * FROM memories WHERE id = ?', [id]);
+      const existing = await this.db.client.memory.findUnique({
+        where: { id },
+      });
       if (!existing) {
         throw createNotFoundError(`Memory with ID ${id} not found`);
       }
 
-      // Build update query dynamically
-      const updates: string[] = [];
-      const params: any[] = [];
+      // Build update data dynamically
+      const updateData: any = {};
 
       if (title !== undefined) {
-        updates.push('title = ?');
-        params.push(title);
+        updateData.title = title;
       }
 
       if (content !== undefined) {
-        updates.push('content = ?');
-        params.push(content);
+        updateData.content = content;
       }
 
       if (category !== undefined) {
         const categoryId = await this.ensureCategory(category);
-        updates.push('category_id = ?');
-        params.push(categoryId);
+        updateData.categoryId = categoryId;
       }
 
       if (project !== undefined) {
         if (project) {
           const projectId = await this.ensureProject(project);
-          updates.push('project_id = ?');
-          params.push(projectId);
+          updateData.projectId = projectId;
         } else {
-          updates.push('project_id = NULL');
+          updateData.projectId = null;
         }
       }
 
       if (priority !== undefined) {
-        updates.push('priority = ?');
-        params.push(priority);
+        updateData.priority = priority;
       }
 
-      if (updates.length === 0) {
+      if (Object.keys(updateData).length === 0) {
         throw createValidationError('At least one field must be provided for update');
       }
 
-      updates.push('updated_at = CURRENT_TIMESTAMP');
-      params.push(id);
+      updateData.updatedAt = new Date();
 
-      await this.db.run(
-        `
-        UPDATE memories 
-        SET ${updates.join(', ')}
-        WHERE id = ?
-      `,
-        params
-      );
+      // Update memory in a transaction
+      const updatedMemory = await this.db.client.$transaction(async prisma => {
+        // Update the memory
+        const memory = await prisma.memory.update({
+          where: { id },
+          data: updateData,
+        });
 
-      // Update tags if provided
-      if (tags !== undefined) {
-        const tagIds = await this.ensureTags(tags);
-        await this.updateMemoryTags(id, tagIds);
-      }
+        // Update tags if provided
+        if (tags !== undefined) {
+          const tagIds = await this.ensureTags(tags);
+
+          // Remove existing tags
+          await prisma.memoryTag.deleteMany({
+            where: { memoryId: id },
+          });
+
+          // Add new tags
+          if (tagIds.length > 0) {
+            await prisma.memoryTag.createMany({
+              data: tagIds.map(tagId => ({
+                memoryId: id,
+                tagId,
+              })),
+            });
+          }
+        }
+
+        return memory;
+      });
 
       // Regenerate embedding if content or title changed
       if (title !== undefined || content !== undefined) {
@@ -389,25 +420,42 @@ export class MemoryServiceImpl implements MemoryService {
             `${finalTitle}: ${finalContent}`
           );
 
-          await this.db.run(
-            `
-            UPDATE memories 
-            SET embedding = ?, embedding_model = ?, embedding_created_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `,
-            [JSON.stringify(embedding), embeddingService.getModelName(), id]
-          );
+          await this.db.client.memory.update({
+            where: { id },
+            data: {
+              embedding: JSON.stringify(embedding),
+              embeddingModel: embeddingService.getModelName(),
+              embeddingCreatedAt: new Date(),
+            },
+          });
         } catch (embeddingError) {
           console.warn(`Failed to regenerate embedding for memory ${id}:`, embeddingError);
         }
       }
 
       // Get the updated memory with relations
-      const updatedMemory = await this.getMemoryWithRelations(id);
+      const memoryWithRelations = await this.db.client.memory.findUnique({
+        where: { id },
+        include: {
+          category: true,
+          project: true,
+          memoryTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+      });
+
+      // Format tags
+      const formattedMemory = {
+        ...memoryWithRelations,
+        tags: memoryWithRelations!.memoryTags.map((mt: any) => mt.tag.name),
+      };
 
       return createMCPResponse(
-        updatedMemory,
-        `Memory "${updatedMemory!.title}" updated successfully`
+        formattedMemory,
+        `Memory "${formattedMemory.title}" updated successfully`
       );
     });
   }
@@ -423,18 +471,19 @@ export class MemoryServiceImpl implements MemoryService {
         throw createValidationError('Valid memory ID is required');
       }
 
-      // Check if memory exists
-      const existing = await this.db.get('SELECT * FROM memories WHERE id = ?', [id]);
+      // Check if memory exists and get its title
+      const existing = await this.db.client.memory.findUnique({
+        where: { id },
+        select: { title: true },
+      });
       if (!existing) {
         throw createNotFoundError(`Memory with ID ${id} not found`);
       }
 
       // Delete memory (tags will be deleted automatically due to CASCADE)
-      const result = await this.db.run('DELETE FROM memories WHERE id = ?', [id]);
-
-      if (result.changes === 0) {
-        throw createNotFoundError(`Memory with ID ${id} not found`);
-      }
+      await this.db.client.memory.delete({
+        where: { id },
+      });
 
       return createMCPResponse({ id }, `Memory "${existing.title}" deleted successfully`);
     });
@@ -445,40 +494,49 @@ export class MemoryServiceImpl implements MemoryService {
    */
   async getMemoryStats(args: GetMemoryStatsArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
-      const totalMemories = await this.db.get('SELECT COUNT(*) as count FROM memories');
-      const categoriesCount = await this.db.get(
-        'SELECT COUNT(DISTINCT category_id) as count FROM memories WHERE category_id IS NOT NULL'
-      );
-      const projectsCount = await this.db.get(
-        'SELECT COUNT(DISTINCT project_id) as count FROM memories WHERE project_id IS NOT NULL'
-      );
-      const embeddingsCount = await this.db.get(
-        'SELECT COUNT(*) as count FROM memories WHERE embedding IS NOT NULL'
-      );
-
-      // Get priority distribution
-      const priorityStats = await this.db.all(`
-        SELECT priority, COUNT(*) as count 
-        FROM memories 
-        GROUP BY priority 
-        ORDER BY priority DESC
-      `);
-
-      // Get recent activity (last 7 days)
-      const recentActivity = await this.db.get(`
-        SELECT COUNT(*) as count 
-        FROM memories 
-        WHERE created_at >= datetime('now', '-7 days')
-      `);
+      const [
+        totalMemories,
+        categoriesCount,
+        projectsCount,
+        embeddingsCount,
+        priorityStats,
+        recentActivity,
+      ] = await Promise.all([
+        this.db.client.memory.count(),
+        this.db.client.memory.count({
+          where: { categoryId: { not: null } },
+        }),
+        this.db.client.memory.count({
+          where: { projectId: { not: null } },
+        }),
+        this.db.client.memory.count({
+          where: { embedding: { not: null } },
+        }),
+        this.db.client.memory.groupBy({
+          by: ['priority'],
+          _count: { priority: true },
+          orderBy: { priority: 'desc' },
+        }),
+        this.db.client.memory.count({
+          where: {
+            createdAt: {
+              gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
+            },
+          },
+        }),
+      ]);
 
       const stats = {
-        total_memories: totalMemories.count,
-        categories_used: categoriesCount.count,
-        projects_used: projectsCount.count,
-        embeddings_generated: embeddingsCount.count,
-        priority_distribution: priorityStats,
+        total_memories: totalMemories,
+        categories_used: categoriesCount,
+        projects_used: projectsCount,
+        embeddings_generated: embeddingsCount,
+        priority_distribution: priorityStats.map(p => ({
+          priority: p.priority,
+          count: p._count.priority,
+        })),
         recent_activity: {
-          last_7_days: recentActivity.count,
+          last_7_days: recentActivity,
         },
       };
 
@@ -493,47 +551,46 @@ export class MemoryServiceImpl implements MemoryService {
     return handleAsyncError(async () => {
       const { category, project } = args;
 
-      let sql = `
-        SELECT 
-          m.*,
-          c.name as category,
-          p.name as project,
-          GROUP_CONCAT(t.name) as tags
-        FROM memories m
-        LEFT JOIN categories c ON m.category_id = c.id
-        LEFT JOIN projects p ON m.project_id = p.id
-        LEFT JOIN memory_tags mt ON m.id = mt.memory_id
-        LEFT JOIN tags t ON mt.tag_id = t.id
-        WHERE 1=1
-      `;
-
-      const params: any[] = [];
+      // Build where conditions
+      const where: any = {};
 
       if (category) {
-        sql += ` AND c.name = ?`;
-        params.push(category);
+        where.category = {
+          name: category.toLowerCase(),
+        };
       }
 
       if (project) {
-        sql += ` AND p.name = ?`;
-        params.push(project);
+        where.project = {
+          name: project.toLowerCase(),
+        };
       }
 
-      sql += ` GROUP BY m.id ORDER BY m.created_at DESC`;
-
-      const memories = await this.db.all(sql, params);
+      const memories = await this.db.client.memory.findMany({
+        where,
+        include: {
+          category: true,
+          project: true,
+          memoryTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
 
       // Format tags and remove embedding data for export
       const exportData = memories.map(memory => ({
         id: memory.id,
         title: memory.title,
         content: memory.content,
-        category: memory.category,
-        project: memory.project,
+        category: memory.category?.name,
+        project: memory.project?.name,
         priority: memory.priority,
-        tags: memory.tags ? memory.tags.split(',') : [],
-        created_at: memory.created_at,
-        updated_at: memory.updated_at,
+        tags: memory.memoryTags.map(mt => mt.tag.name),
+        created_at: memory.createdAt,
+        updated_at: memory.updatedAt,
       }));
 
       return createMCPResponse(exportData, `Exported ${exportData.length} memories`);
@@ -544,38 +601,36 @@ export class MemoryServiceImpl implements MemoryService {
    * Get memory with all relations (categories, projects, tags)
    */
   private async getMemoryWithRelations(memoryId: number): Promise<Memory | null> {
-    const memory = await this.db.get(
-      `
-      SELECT 
-        m.*,
-        c.name as category,
-        p.name as project
-      FROM memories m
-      LEFT JOIN categories c ON m.category_id = c.id
-      LEFT JOIN projects p ON m.project_id = p.id
-      WHERE m.id = ?
-    `,
-      [memoryId]
-    );
+    const memory = await this.db.client.memory.findUnique({
+      where: { id: memoryId },
+      include: {
+        category: true,
+        project: true,
+        memoryTags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
+    });
 
     if (!memory) {
       return null;
     }
 
-    // Get tags
-    const tags = await this.db.all(
-      `
-      SELECT t.name 
-      FROM memory_tags mt
-      JOIN tags t ON mt.tag_id = t.id
-      WHERE mt.memory_id = ?
-    `,
-      [memoryId]
-    );
-
     return {
-      ...memory,
-      tags: tags.map(tag => tag.name),
+      id: memory.id,
+      title: memory.title,
+      content: memory.content,
+      category: memory.category?.name,
+      project: memory.project?.name,
+      priority: memory.priority,
+      tags: memory.memoryTags.map((mt: any) => mt.tag.name),
+      created_at: memory.createdAt.toISOString(),
+      updated_at: memory.updatedAt.toISOString(),
+      embedding: memory.embedding || undefined,
+      embedding_model: memory.embeddingModel || undefined,
+      embedding_created_at: memory.embeddingCreatedAt?.toISOString() || undefined,
     };
   }
 
@@ -583,36 +638,90 @@ export class MemoryServiceImpl implements MemoryService {
    * Update memory tags
    */
   private async updateMemoryTags(memoryId: number, tagIds: number[]): Promise<void> {
-    await this.db.updateMemoryTags(memoryId, tagIds);
+    // Remove existing tags
+    await this.db.client.memoryTag.deleteMany({
+      where: { memoryId },
+    });
+
+    // Add new tags
+    if (tagIds.length > 0) {
+      await this.db.client.memoryTag.createMany({
+        data: tagIds.map(tagId => ({
+          memoryId,
+          tagId,
+        })),
+      });
+    }
   }
 
   /**
    * Ensure category exists and return its ID
    */
   private async ensureCategory(categoryName: string): Promise<number> {
-    const categoryId = await this.db.ensureCategory(categoryName);
-    if (!categoryId) {
-      throw createValidationError(`Failed to create or find category: ${categoryName}`);
+    let category = await this.db.client.category.findFirst({
+      where: { name: categoryName.toLowerCase() },
+    });
+
+    if (!category) {
+      category = await this.db.client.category.create({
+        data: {
+          name: categoryName.toLowerCase(),
+          description: `Auto-created category: ${categoryName}`,
+        },
+      });
     }
-    return categoryId;
+
+    return category.id;
   }
 
   /**
    * Ensure project exists and return its ID
    */
   private async ensureProject(projectName: string): Promise<number> {
-    const projectId = await this.db.ensureProject(projectName);
-    if (!projectId) {
-      throw createValidationError(`Failed to create or find project: ${projectName}`);
+    let project = await this.db.client.project.findFirst({
+      where: { name: projectName.toLowerCase() },
+    });
+
+    if (!project) {
+      project = await this.db.client.project.create({
+        data: {
+          name: projectName.toLowerCase(),
+          description: `Auto-created project: ${projectName}`,
+        },
+      });
     }
-    return projectId;
+
+    return project.id;
   }
 
   /**
    * Ensure tags exist and return their IDs
    */
   private async ensureTags(tagsString: string): Promise<number[]> {
-    return await this.db.ensureTags(tagsString);
+    if (!tagsString) return [];
+
+    const tagNames = tagsString
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(tag => tag);
+
+    const tagIds: number[] = [];
+
+    for (const tagName of tagNames) {
+      let tag = await this.db.client.tag.findFirst({
+        where: { name: tagName },
+      });
+
+      if (!tag) {
+        tag = await this.db.client.tag.create({
+          data: { name: tagName },
+        });
+      }
+
+      tagIds.push(tag.id);
+    }
+
+    return tagIds;
   }
 }
 

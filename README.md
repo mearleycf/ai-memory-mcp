@@ -177,7 +177,9 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
     "ai-memory": {
       "command": "node",
       "args": ["/Users/mikeearley/code/mcp_servers/ai-memory-mcp/dist/index-with-context-tools.js"],
-      "env": {}
+      "env": {
+        "DATABASE_URL": "postgres://mikeearley@localhost:5432/ai_memory_mcp_db"
+      }
     }
   }
 }

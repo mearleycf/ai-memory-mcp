@@ -383,7 +383,7 @@ export class MemoryServiceImpl implements MemoryService {
       // Update memory in a transaction
       const updatedMemory = await this.db.client.$transaction(async prisma => {
         // Update the memory
-        const memory = await prisma.memory.update({
+        const updatedMem = await prisma.memory.update({
           where: { id },
           data: updateData,
         });
@@ -408,7 +408,7 @@ export class MemoryServiceImpl implements MemoryService {
           }
         }
 
-        return memory;
+        return updatedMem;
       });
 
       // Regenerate embedding if content or title changed

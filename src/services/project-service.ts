@@ -77,21 +77,24 @@ export class ProjectServiceImpl implements ProjectService {
       }
 
       try {
-        const result = await this.db.run(
-          'INSERT INTO projects (name, description, color) VALUES (?, ?, ?)',
-          [name.toLowerCase().trim(), description, color]
-        );
+        const result = await this.db.client.project.create({
+          data: {
+            name: name.toLowerCase().trim(),
+            description,
+            color,
+          },
+        });
 
         return {
           content: [
             {
               type: 'text',
-              text: `Project '${name}' created successfully with ID: ${result.lastID}`,
+              text: `Project '${name}' created successfully with ID: ${result.id}`,
             },
           ],
         };
       } catch (error: any) {
-        if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        if (error.code === 'P2002') {
           return {
             content: [
               {
@@ -114,33 +117,21 @@ export class ProjectServiceImpl implements ProjectService {
     return handleAsyncError(async () => {
       const { include_stats = true } = args;
 
-      let sql = 'SELECT * FROM projects';
-
-      if (include_stats) {
-        sql = `
-          SELECT 
-            p.*,
-            COALESCE(m.memory_count, 0) as memory_count,
-            COALESCE(t.task_count, 0) as task_count
-          FROM projects p
-          LEFT JOIN (
-            SELECT project_id, COUNT(*) as memory_count 
-            FROM memories 
-            WHERE project_id IS NOT NULL 
-            GROUP BY project_id
-          ) m ON p.id = m.project_id
-          LEFT JOIN (
-            SELECT project_id, COUNT(*) as task_count 
-            FROM tasks 
-            WHERE project_id IS NOT NULL AND archived = FALSE
-            GROUP BY project_id
-          ) t ON p.id = t.project_id
-        `;
-      }
-
-      sql += ' ORDER BY p.name';
-
-      const projects = await this.db.all(sql);
+      const projects = await this.db.client.project.findMany({
+        include: include_stats
+          ? {
+              _count: {
+                select: {
+                  memories: true,
+                  tasks: {
+                    where: { archived: false },
+                  },
+                },
+              },
+            }
+          : undefined,
+        orderBy: { name: 'asc' },
+      });
 
       let output = `Found ${projects.length} projects:\n\n`;
 
@@ -148,12 +139,12 @@ export class ProjectServiceImpl implements ProjectService {
         output += projects
           .map(
             p =>
-              `📁 ${p.name} (ID: ${p.id})\n${p.description}\nMemories: ${p.memory_count}, Tasks: ${p.task_count}\nCreated: ${p.created_at}\n---`
+              `📁 ${p.name} (ID: ${p.id})\n${p.description}\nMemories: ${(p as any)._count.memories}, Tasks: ${(p as any)._count.tasks}\nCreated: ${p.createdAt}\n---`
           )
           .join('\n\n');
       } else {
         output += projects
-          .map(p => `📁 ${p.name} (ID: ${p.id})\n${p.description}\nCreated: ${p.created_at}\n---`)
+          .map(p => `📁 ${p.name} (ID: ${p.id})\n${p.description}\nCreated: ${p.createdAt}\n---`)
           .join('\n\n');
       }
 
@@ -179,13 +170,15 @@ export class ProjectServiceImpl implements ProjectService {
         throw createValidationError('Please provide either project ID or name');
       }
 
-      let project: Project | null = null;
+      let project: any = null;
       if (id) {
-        project = await this.db.get('SELECT * FROM projects WHERE id = ?', [id]);
+        project = await this.db.client.project.findUnique({
+          where: { id },
+        });
       } else if (name) {
-        project = await this.db.get('SELECT * FROM projects WHERE name = ?', [
-          name.toLowerCase().trim(),
-        ]);
+        project = await this.db.client.project.findFirst({
+          where: { name: name.toLowerCase().trim() },
+        });
       }
 
       if (!project) {
@@ -193,20 +186,23 @@ export class ProjectServiceImpl implements ProjectService {
       }
 
       // Get counts
-      const memoryCount = await this.db.get(
-        'SELECT COUNT(*) as count FROM memories WHERE project_id = ?',
-        [project.id]
-      );
-      const taskCount = await this.db.get(
-        'SELECT COUNT(*) as count FROM tasks WHERE project_id = ? AND archived = FALSE',
-        [project.id]
-      );
+      const [memoryCount, taskCount] = await Promise.all([
+        this.db.client.memory.count({
+          where: { projectId: project.id },
+        }),
+        this.db.client.task.count({
+          where: {
+            projectId: project.id,
+            archived: false,
+          },
+        }),
+      ]);
 
       return {
         content: [
           {
             type: 'text',
-            text: `📁 Project: ${project.name} (ID: ${project.id})\nDescription: ${project.description || 'No description'}\nColor: ${project.color || 'Not set'}\nMemories: ${memoryCount.count}\nActive Tasks: ${taskCount.count}\nCreated: ${project.created_at}\nUpdated: ${project.updated_at}`,
+            text: `📁 Project: ${project.name} (ID: ${project.id})\nDescription: ${project.description || 'No description'}\nColor: ${project.color || 'Not set'}\nMemories: ${memoryCount}\nActive Tasks: ${taskCount}\nCreated: ${project.createdAt}\nUpdated: ${project.updatedAt}`,
           },
         ],
       };
@@ -224,26 +220,22 @@ export class ProjectServiceImpl implements ProjectService {
         throw createValidationError('Project ID is required and must be a number');
       }
 
-      const updates = [];
-      const params = [];
+      const updateData: any = {};
 
       if (name !== undefined) {
         if (typeof name !== 'string' || name.trim().length === 0) {
           throw createValidationError('Project name must be a non-empty string');
         }
-        updates.push('name = ?');
-        params.push(name.toLowerCase().trim());
+        updateData.name = name.toLowerCase().trim();
       }
       if (description !== undefined) {
-        updates.push('description = ?');
-        params.push(description);
+        updateData.description = description;
       }
       if (color !== undefined) {
-        updates.push('color = ?');
-        params.push(color);
+        updateData.color = color;
       }
 
-      if (updates.length === 0) {
+      if (Object.keys(updateData).length === 0) {
         return {
           content: [
             {
@@ -254,18 +246,15 @@ export class ProjectServiceImpl implements ProjectService {
         };
       }
 
-      updates.push('updated_at = CURRENT_TIMESTAMP');
-      params.push(id);
+      updateData.updatedAt = new Date();
 
       try {
-        const result = await this.db.run(
-          `UPDATE projects SET ${updates.join(', ')} WHERE id = ?`,
-          params
-        );
+        const result = await this.db.client.project.update({
+          where: { id },
+          data: updateData,
+        });
 
-        if (result.changes === 0) {
-          throw createNotFoundError(`Project with ID ${id} not found`);
-        }
+        // Prisma update will throw if not found, so we don't need to check changes
 
         return {
           content: [
@@ -276,7 +265,7 @@ export class ProjectServiceImpl implements ProjectService {
           ],
         };
       } catch (error: any) {
-        if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        if (error.code === 'P2002') {
           return {
             content: [
               {
@@ -303,11 +292,11 @@ export class ProjectServiceImpl implements ProjectService {
         throw createValidationError('Project ID is required and must be a number');
       }
 
-      const result = await this.db.run('DELETE FROM projects WHERE id = ?', [id]);
+      const result = await this.db.client.project.delete({
+        where: { id },
+      });
 
-      if (result.changes === 0) {
-        throw createNotFoundError(`Project with ID ${id} not found`);
-      }
+      // Prisma delete will throw if not found, so we don't need to check changes
 
       return {
         content: [

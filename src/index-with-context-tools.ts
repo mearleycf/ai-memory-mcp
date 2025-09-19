@@ -62,7 +62,6 @@ class AIMemoryServer {
         },
       }
     );
-    this.initialize();
   }
 
   private async initialize() {
@@ -299,6 +298,9 @@ class AIMemoryServer {
   }
 
   async run() {
+    // Initialize the server first
+    await this.initialize();
+
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
     console.error('AI Memory MCP server v2.2.0 (with context tools) running on stdio');

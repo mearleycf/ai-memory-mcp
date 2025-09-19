@@ -98,33 +98,47 @@ export class TaskServiceImpl implements TaskService {
       // Ensure tags exist
       const tagIds = await this.ensureTags(tags);
 
-      // Insert task
-      const result = await this.db.run(
-        `
-        INSERT INTO tasks (title, description, status_id, category_id, project_id, priority, due_date, created_at, updated_at, archived)
-        VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, FALSE)
-      `,
-        [title, description, statusId, categoryId, projectId, priority, due_date]
-      );
+      // Insert task with tags in a transaction
+      const createdTask = await this.db.client.$transaction(async prisma => {
+        const task = await prisma.task.create({
+          data: {
+            title,
+            description,
+            statusId,
+            categoryId,
+            projectId,
+            priority,
+            dueDate: due_date ? new Date(due_date) : null,
+            archived: false,
+          },
+        });
 
-      const taskId = result.lastID!;
+        // Add tags if provided
+        if (tagIds.length > 0) {
+          await prisma.taskTag.createMany({
+            data: tagIds.map(tagId => ({
+              taskId: task.id,
+              tagId,
+            })),
+          });
+        }
 
-      // Add tags if provided
-      if (tagIds.length > 0) {
-        await this.updateTaskTags(taskId, tagIds);
-      }
+        return task;
+      });
+
+      const taskId = createdTask.id;
 
       // Generate embedding for semantic search
       try {
         const embedding = await embeddingService.generateEmbedding(`${title}: ${description}`);
-        await this.db.run(
-          `
-          UPDATE tasks 
-          SET embedding = ?, embedding_model = ?, embedding_created_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `,
-          [JSON.stringify(embedding), embeddingService.getModelName(), taskId]
-        );
+        await this.db.client.task.update({
+          where: { id: taskId },
+          data: {
+            embedding: JSON.stringify(embedding),
+            embeddingModel: embeddingService.getModelName(),
+            embeddingCreatedAt: new Date(),
+          },
+        });
       } catch (embeddingError) {
         console.warn(`Failed to generate embedding for task ${taskId}:`, embeddingError);
       }
@@ -164,60 +178,69 @@ export class TaskServiceImpl implements TaskService {
         throw createValidationError(`Invalid sort order: ${sort_order}`);
       }
 
-      let sql = `
-        SELECT 
-          t.*,
-          s.name as status,
-          c.name as category,
-          p.name as project,
-          GROUP_CONCAT(tag.name) as tags
-        FROM tasks t
-        LEFT JOIN statuses s ON t.status_id = s.id
-        LEFT JOIN categories c ON t.category_id = c.id
-        LEFT JOIN projects p ON t.project_id = p.id
-        LEFT JOIN task_tags tt ON t.id = tt.task_id
-        LEFT JOIN tags tag ON tt.tag_id = tag.id
-        WHERE t.archived = ?
-      `;
+      // Build where conditions
+      const where: any = {
+        archived,
+      };
 
-      const params: any[] = [archived];
-
-      // Add filters
       if (status) {
-        sql += ` AND s.name = ?`;
-        params.push(status);
+        where.status = {
+          name: status.toLowerCase(),
+        };
       }
 
       if (category) {
-        sql += ` AND c.name = ?`;
-        params.push(category);
+        where.category = {
+          name: category.toLowerCase(),
+        };
       }
 
       if (project) {
-        sql += ` AND p.name = ?`;
-        params.push(project);
+        where.project = {
+          name: project.toLowerCase(),
+        };
       }
 
-      if (priority_min) {
-        sql += ` AND t.priority >= ?`;
-        params.push(priority_min);
+      if (priority_min !== undefined) {
+        where.priority = {
+          gte: priority_min,
+        };
       }
 
       if (overdue_only) {
-        sql += ` AND t.due_date < date('now') AND t.due_date IS NOT NULL AND s.name != 'completed'`;
+        where.AND = [
+          { dueDate: { lt: new Date() } },
+          { dueDate: { not: null } },
+          { status: { name: { not: 'completed' } } },
+        ];
       }
 
-      sql += ` GROUP BY t.id ORDER BY t.${sort_by} ${sort_order.toUpperCase()} LIMIT ?`;
-      params.push(limit);
+      // Build orderBy
+      const orderBy: any = {};
+      orderBy[sort_by] = sort_order.toLowerCase();
 
-      const tasks = await this.db.all(sql, params);
+      const tasks = await this.db.client.task.findMany({
+        where,
+        include: {
+          status: true,
+          category: true,
+          project: true,
+          taskTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+        orderBy,
+        take: limit,
+      });
 
       // Format tags and add computed fields
       const formattedTasks = tasks.map(task => ({
         ...task,
-        tags: task.tags ? task.tags.split(',') : [],
+        tags: task.taskTags.map(tt => tt.tag.name),
         is_overdue:
-          task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed',
+          task.dueDate && new Date(task.dueDate) < new Date() && task.status.name !== 'completed',
       }));
 
       return createMCPResponse(formattedTasks, `Retrieved ${formattedTasks.length} tasks`);

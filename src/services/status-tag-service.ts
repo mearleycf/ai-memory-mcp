@@ -1,5 +1,11 @@
-import { DatabaseOperations, MCPResponse } from '../core/types.js';
-import { createMCPResponse, createErrorResponse, handleAsyncError, ErrorResponse } from '../utils/error-handling.js';
+import { PrismaDatabaseService } from '../core/prisma-database.js';
+import { MCPResponse } from '../core/types.js';
+import {
+  createMCPResponse,
+  createErrorResponse,
+  handleAsyncError,
+  ErrorResponse,
+} from '../utils/error-handling.js';
 
 export interface StatusTagService {
   listStatuses(): Promise<MCPResponse | ErrorResponse>;
@@ -10,22 +16,19 @@ export interface StatusTagService {
 }
 
 export class StatusTagServiceImpl implements StatusTagService {
-  constructor(private db: DatabaseOperations) {}
+  constructor(private db: PrismaDatabaseService) {}
 
   async listStatuses(): Promise<MCPResponse | ErrorResponse> {
     return handleAsyncError(async () => {
-      const statuses = await this.db.dbAll('SELECT * FROM statuses ORDER BY sort_order');
+      const statuses = await this.db.all('SELECT * FROM statuses ORDER BY sort_order');
 
-      return createMCPResponse(
-        statuses,
-        `Found ${statuses.length} task statuses`
-      );
+      return createMCPResponse(statuses, `Found ${statuses.length} task statuses`);
     });
   }
 
   async listTags(): Promise<MCPResponse | ErrorResponse> {
     return handleAsyncError(async () => {
-      const tags = await this.db.dbAll(`
+      const tags = await this.db.all(`
         SELECT 
           t.id,
           t.name,
@@ -46,10 +49,7 @@ export class StatusTagServiceImpl implements StatusTagService {
         ORDER BY t.name
       `);
 
-      return createMCPResponse(
-        tags,
-        `Found ${tags.length} tags`
-      );
+      return createMCPResponse(tags, `Found ${tags.length} tags`);
     });
   }
 
@@ -59,9 +59,9 @@ export class StatusTagServiceImpl implements StatusTagService {
 
       let result;
       if (id) {
-        result = await this.db.dbRun('DELETE FROM tags WHERE id = ?', [id]);
+        result = await this.db.run('DELETE FROM tags WHERE id = ?', [id]);
       } else if (name) {
-        result = await this.db.dbRun('DELETE FROM tags WHERE name = ?', [name.toLowerCase().trim()]);
+        result = await this.db.run('DELETE FROM tags WHERE name = ?', [name.toLowerCase().trim()]);
       } else {
         return createErrorResponse('Either id or name must be provided');
       }
@@ -70,28 +70,26 @@ export class StatusTagServiceImpl implements StatusTagService {
         return createErrorResponse('Tag not found');
       }
 
-      return createMCPResponse(
-        { deleted: true },
-        `Tag deleted successfully`
-      );
+      return createMCPResponse({ deleted: true }, `Tag deleted successfully`);
     });
   }
 
   async updateMemoryTags(memoryId: number, tagIds: number[]): Promise<void> {
     // Remove existing tags
-    await this.db.dbRun('DELETE FROM memory_tags WHERE memory_id = ?', [memoryId]);
-    
+    await this.db.run('DELETE FROM memory_tags WHERE memory_id = ?', [memoryId]);
+
     // Add new tags
     for (const tagId of tagIds) {
-      await this.db.dbRun(
-        'INSERT INTO memory_tags (memory_id, tag_id) VALUES (?, ?)',
-        [memoryId, tagId]
-      );
+      await this.db.run('INSERT INTO memory_tags (memory_id, tag_id) VALUES (?, ?)', [
+        memoryId,
+        tagId,
+      ]);
     }
   }
 
   async getMemoryWithRelations(memoryId: number): Promise<any> {
-    const memory = await this.db.dbGet(`
+    const memory = await this.db.get(
+      `
       SELECT 
         m.*,
         c.name as category,
@@ -100,27 +98,32 @@ export class StatusTagServiceImpl implements StatusTagService {
       LEFT JOIN categories c ON m.category_id = c.id
       LEFT JOIN projects p ON m.project_id = p.id
       WHERE m.id = ?
-    `, [memoryId]);
+    `,
+      [memoryId]
+    );
 
     if (!memory) return null;
 
     // Get tags for this memory
-    const tags = await this.db.dbAll(`
+    const tags = await this.db.all(
+      `
       SELECT t.name 
       FROM tags t
       JOIN memory_tags mt ON t.id = mt.tag_id
       WHERE mt.memory_id = ?
       ORDER BY t.name
-    `, [memoryId]);
+    `,
+      [memoryId]
+    );
 
     return {
       ...memory,
-      tags: tags.map((t: any) => t.name)
+      tags: tags.map((t: any) => t.name),
     };
   }
 }
 
 // Export factory function
-export function createStatusTagService(db: DatabaseOperations): StatusTagService {
+export function createStatusTagService(db: PrismaDatabaseService): StatusTagService {
   return new StatusTagServiceImpl(db);
 }

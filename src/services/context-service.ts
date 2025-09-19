@@ -1,33 +1,29 @@
 /**
  * Context Service for AI Memory MCP Server
- * 
+ *
  * This service provides intelligent context retrieval for AI agents,
  * including project context, task context, memory context, and work priorities.
- * 
+ *
  * @fileoverview Context service with semantic search integration
  */
 
-import { DatabaseManager } from '../core/database.js';
+import { PrismaDatabaseService } from '../core/prisma-database.js';
 import { embeddingService } from '../embedding-service.js';
-import { 
-  Memory, 
-  Task, 
-  Project, 
-  Category, 
+import {
+  Memory,
+  Task,
+  Project,
+  Category,
   AIInstruction,
   ContextLevel as ContextDetailLevel,
-  TimeHorizon 
+  TimeHorizon,
 } from '../core/types.js';
-import { 
-  CONTEXT_DETAIL_LEVELS, 
-  TIME_HORIZONS,
-  TASK_STATUS_IDS 
-} from '../utils/constants.js';
-import { 
-  AIMemoryError, 
-  createNotFoundError, 
+import { CONTEXT_DETAIL_LEVELS, TIME_HORIZONS, TASK_STATUS_IDS } from '../utils/constants.js';
+import {
+  AIMemoryError,
+  createNotFoundError,
   createValidationError,
-  handleAsyncError 
+  handleAsyncError,
 } from '../utils/error-handling.js';
 
 /**
@@ -99,7 +95,7 @@ export interface ContextResponse {
  */
 export class ContextServiceImpl implements ContextService {
   constructor(
-    private database: DatabaseManager,
+    private database: PrismaDatabaseService,
     private embeddingService: any
   ) {}
 
@@ -108,11 +104,11 @@ export class ContextServiceImpl implements ContextService {
    */
   async getProjectContext(args: ProjectContextArgs): Promise<ContextResponse> {
     return handleAsyncError(async () => {
-      const { 
-        project, 
-        level = CONTEXT_DETAIL_LEVELS.STANDARD, 
-        include_completed = false, 
-        max_items = 10 
+      const {
+        project,
+        level = CONTEXT_DETAIL_LEVELS.STANDARD,
+        include_completed = false,
+        max_items = 10,
       } = args;
 
       // Validate inputs
@@ -121,9 +117,6 @@ export class ContextServiceImpl implements ContextService {
       }
 
       // Get project details
-      console.log('[Context Service] Database object:', typeof this.database);
-      console.log('[Context Service] Database methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(this.database)));
-      console.log('[Context Service] getProjectByName method:', typeof this.database.getProjectByName);
       const projectData = await this.database.getProjectByName(project.toLowerCase());
       if (!projectData) {
         throw createNotFoundError('Project', project);
@@ -155,10 +148,12 @@ export class ContextServiceImpl implements ContextService {
       context += this.formatProjectStatistics(stats);
 
       return {
-        content: [{
-          type: 'text',
-          text: context,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: context,
+          },
+        ],
       };
     }, 'getProjectContext');
   }
@@ -168,11 +163,11 @@ export class ContextServiceImpl implements ContextService {
    */
   async getTaskContext(args: TaskContextArgs): Promise<ContextResponse> {
     return handleAsyncError(async () => {
-      const { 
-        task_id, 
-        level = CONTEXT_DETAIL_LEVELS.STANDARD, 
-        include_related = true, 
-        semantic_search = true 
+      const {
+        task_id,
+        level = CONTEXT_DETAIL_LEVELS.STANDARD,
+        include_related = true,
+        semantic_search = true,
       } = args;
 
       // Validate inputs
@@ -186,7 +181,8 @@ export class ContextServiceImpl implements ContextService {
         throw createNotFoundError('Task', task_id);
       }
 
-      const overdueFlag = task.due_date && new Date(task.due_date) < new Date() ? ' 🔴 OVERDUE' : '';
+      const overdueFlag =
+        task.due_date && new Date(task.due_date) < new Date() ? ' 🔴 OVERDUE' : '';
       const statusEmoji = this.getStatusEmoji(task.status || 'not_started');
 
       let context = `${statusEmoji} **Task Context: ${task.title}**${overdueFlag}\n\n`;
@@ -227,10 +223,12 @@ export class ContextServiceImpl implements ContextService {
       }
 
       return {
-        content: [{
-          type: 'text',
-          text: context,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: context,
+          },
+        ],
       };
     }, 'getTaskContext');
   }
@@ -240,13 +238,13 @@ export class ContextServiceImpl implements ContextService {
    */
   async getMemoryContext(args: MemoryContextArgs): Promise<ContextResponse> {
     return handleAsyncError(async () => {
-      const { 
-        topic, 
-        category, 
-        project, 
-        priority_min = 1, 
-        limit = 15, 
-        min_similarity = 0.15 
+      const {
+        topic,
+        category,
+        project,
+        priority_min = 1,
+        limit = 15,
+        min_similarity = 0.15,
       } = args;
 
       // Validate inputs
@@ -275,10 +273,12 @@ export class ContextServiceImpl implements ContextService {
 
       if (memories.length === 0) {
         return {
-          content: [{
-            type: 'text',
-            text: `No relevant memories found for topic: "${topic}"`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `No relevant memories found for topic: "${topic}"`,
+            },
+          ],
         };
       }
 
@@ -286,26 +286,29 @@ export class ContextServiceImpl implements ContextService {
       context += `Found ${memories.length} relevant memories:\n\n`;
 
       for (const memory of memories) {
-        const similarity = (memory as any).similarity_score 
-          ? `[${((memory as any).similarity_score * 100).toFixed(0)}% match] ` 
+        const similarity = (memory as any).similarity_score
+          ? `[${((memory as any).similarity_score * 100).toFixed(0)}% match] `
           : '';
-        
+
         context += `• ${similarity}[P${memory.priority}] ${memory.title}\n`;
         context += `  📂 ${memory.category || 'None'} | 📁 ${memory.project || 'None'}\n`;
-        
+
         if (memory.tags && memory.tags.length > 0) {
           context += `  🏷️ ${memory.tags.join(', ')}\n`;
         }
-        
-        const preview = memory.content.length > 200 ? memory.content.substring(0, 200) + '...' : memory.content;
+
+        const preview =
+          memory.content.length > 200 ? memory.content.substring(0, 200) + '...' : memory.content;
         context += `  ${preview}\n\n`;
       }
 
       return {
-        content: [{
-          type: 'text',
-          text: context,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: context,
+          },
+        ],
       };
     }, 'getMemoryContext');
   }
@@ -315,30 +318,36 @@ export class ContextServiceImpl implements ContextService {
    */
   async getWorkPriorities(args: WorkPrioritiesArgs): Promise<ContextResponse> {
     return handleAsyncError(async () => {
-      const { 
-        time_horizon = TIME_HORIZONS.ALL, 
-        category, 
-        project, 
-        priority_min = 1, 
-        limit = 20 
+      const {
+        time_horizon = TIME_HORIZONS.ALL,
+        category,
+        project,
+        priority_min = 1,
+        limit = 20,
       } = args;
 
       // Get tasks based on time horizon
-      const tasks = await this.getTasksByTimeHorizon(time_horizon as any, { category, project, priority_min });
-      
+      const tasks = await this.getTasksByTimeHorizon(time_horizon as any, {
+        category,
+        project,
+        priority_min,
+      });
+
       if (tasks.length === 0) {
         return {
-          content: [{
-            type: 'text',
-            text: `No tasks found for the specified criteria.`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `No tasks found for the specified criteria.`,
+            },
+          ],
         };
       }
 
       // Calculate urgency scores
       const tasksWithUrgency = tasks.map(task => ({
         ...task,
-        urgency_score: this.calculateUrgencyScore(task)
+        urgency_score: this.calculateUrgencyScore(task),
       }));
 
       // Sort by urgency score
@@ -351,7 +360,7 @@ export class ContextServiceImpl implements ContextService {
       const low = tasksWithUrgency.filter(t => t.urgency_score < 4);
 
       let context = `🎯 **Work Priorities** (${time_horizon} view)\n\n`;
-      
+
       if (urgent.length > 0) {
         context += `🚨 **URGENT** (${urgent.length} tasks):\n`;
         context += this.formatPriorityTasks(urgent.slice(0, limit));
@@ -381,10 +390,12 @@ export class ContextServiceImpl implements ContextService {
       context += `• Due This Week: ${stats.dueThisWeek}\n`;
 
       return {
-        content: [{
-          type: 'text',
-          text: context,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: context,
+          },
+        ],
       };
     }, 'getWorkPriorities');
   }
@@ -392,15 +403,19 @@ export class ContextServiceImpl implements ContextService {
   // Private helper methods
 
   private async getProjectAIInstructions(projectId: number): Promise<AIInstruction[]> {
-    return this.database.dbAll(`
+    return this.database.all(
+      `
       SELECT * FROM ai_instructions 
       WHERE (scope = 'global') OR (scope = 'project' AND target_id = ?)
       ORDER BY priority DESC, created_at DESC
-    `, [projectId]);
+    `,
+      [projectId]
+    );
   }
 
   private async getProjectMemories(projectId: number, maxItems: number): Promise<Memory[]> {
-    return this.database.dbAll(`
+    return this.database.all(
+      `
       SELECT m.*, c.name as category, GROUP_CONCAT(t.name, ', ') as tags
       FROM memories m
       LEFT JOIN categories c ON m.category_id = c.id
@@ -410,12 +425,19 @@ export class ContextServiceImpl implements ContextService {
       GROUP BY m.id
       ORDER BY m.priority DESC, m.updated_at DESC
       LIMIT ?
-    `, [projectId, maxItems]);
+    `,
+      [projectId, maxItems]
+    );
   }
 
-  private async getProjectTasks(projectId: number, maxItems: number, includeCompleted: boolean): Promise<Task[]> {
+  private async getProjectTasks(
+    projectId: number,
+    maxItems: number,
+    includeCompleted: boolean
+  ): Promise<Task[]> {
     const taskStatusFilter = includeCompleted ? '' : " AND s.name != 'completed'";
-    return this.database.dbAll(`
+    return this.database.all(
+      `
       SELECT t.*, s.name as status, c.name as category, GROUP_CONCAT(tag.name, ', ') as tags
       FROM tasks t
       LEFT JOIN statuses s ON t.status_id = s.id
@@ -433,11 +455,14 @@ export class ContextServiceImpl implements ContextService {
         t.due_date ASC,
         t.updated_at DESC
       LIMIT ?
-    `, [projectId, maxItems]);
+    `,
+      [projectId, maxItems]
+    );
   }
 
   private async getProjectStatistics(projectId: number): Promise<any> {
-    return this.database.dbGet(`
+    return this.database.get(
+      `
       SELECT 
         COUNT(DISTINCT m.id) as memory_count,
         COUNT(DISTINCT t.id) as task_count,
@@ -448,11 +473,14 @@ export class ContextServiceImpl implements ContextService {
       LEFT JOIN tasks t ON p.id = t.project_id AND t.archived = FALSE
       LEFT JOIN statuses s ON t.status_id = s.id
       WHERE p.id = ?
-    `, [projectId]);
+    `,
+      [projectId]
+    );
   }
 
   private async getTaskAIInstructions(task: Task): Promise<AIInstruction[]> {
-    return this.database.dbAll(`
+    return this.database.all(
+      `
       SELECT ai.* FROM ai_instructions ai
       LEFT JOIN projects p ON ai.target_id = p.id AND ai.scope = 'project'
       LEFT JOIN categories c ON ai.target_id = c.id AND ai.scope = 'category'
@@ -460,32 +488,37 @@ export class ContextServiceImpl implements ContextService {
       OR (ai.scope = 'project' AND p.name = ?)
       OR (ai.scope = 'category' AND c.name = ?)
       ORDER BY ai.priority DESC, ai.created_at DESC
-    `, [task.project || '', task.category || '']);
+    `,
+      [task.project || '', task.category || '']
+    );
   }
 
   private async getRelatedTasks(projectId: number, excludeTaskId: number): Promise<Task[]> {
-    return this.database.dbAll(`
+    return this.database.all(
+      `
       SELECT t.*, s.name as status
       FROM tasks t
       LEFT JOIN statuses s ON t.status_id = s.id
       WHERE t.project_id = ? AND t.id != ? AND t.archived = FALSE
       ORDER BY t.priority DESC, t.updated_at DESC
       LIMIT 5
-    `, [projectId, excludeTaskId]);
+    `,
+      [projectId, excludeTaskId]
+    );
   }
 
   private async getSemanticMemories(
-    query: string, 
-    filters: { category?: string; project?: string; priority_min?: number }, 
-    limit: number, 
+    query: string,
+    filters: { category?: string; project?: string; priority_min?: number },
+    limit: number,
     minSimilarity: number
   ): Promise<Memory[]> {
     return this.embeddingService.searchMemories(query, filters, limit, minSimilarity);
   }
 
   private async getKeywordMemories(
-    topic: string, 
-    filters: { category?: string; project?: string; priority_min?: number }, 
+    topic: string,
+    filters: { category?: string; project?: string; priority_min?: number },
     limit: number
   ): Promise<Memory[]> {
     let sql = `
@@ -502,7 +535,14 @@ export class ContextServiceImpl implements ContextService {
       WHERE (m.title LIKE ? OR m.content LIKE ? OR c.name LIKE ? OR p.name LIKE ? OR t.name LIKE ?)
       AND m.priority >= ?
     `;
-    const params = [`%${topic}%`, `%${topic}%`, `%${topic}%`, `%${topic}%`, `%${topic}%`, filters.priority_min || 1];
+    const params = [
+      `%${topic}%`,
+      `%${topic}%`,
+      `%${topic}%`,
+      `%${topic}%`,
+      `%${topic}%`,
+      filters.priority_min || 1,
+    ];
 
     if (filters.category) {
       sql += ` AND c.name = ?`;
@@ -517,11 +557,11 @@ export class ContextServiceImpl implements ContextService {
     sql += ` GROUP BY m.id ORDER BY m.priority DESC, m.updated_at DESC LIMIT ?`;
     params.push(limit);
 
-    return this.database.dbAll(sql, params);
+    return this.database.all(sql, params);
   }
 
   private async getTasksByTimeHorizon(
-    timeHorizon: TimeHorizon, 
+    timeHorizon: TimeHorizon,
     filters: { category?: string; project?: string; priority_min?: number }
   ): Promise<Task[]> {
     let dateFilter = '';
@@ -564,7 +604,7 @@ export class ContextServiceImpl implements ContextService {
 
     sql += ` ORDER BY t.priority DESC, t.due_date ASC, t.updated_at DESC`;
 
-    return this.database.dbAll(sql, params);
+    return this.database.all(sql, params);
   }
 
   private calculateUrgencyScore(task: Task): number {
@@ -600,7 +640,9 @@ export class ContextServiceImpl implements ContextService {
   private calculatePriorityStats(tasks: any[]): any {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const weekFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .split('T')[0];
 
     return {
       total: tasks.length,
@@ -615,8 +657,12 @@ export class ContextServiceImpl implements ContextService {
   private formatAIInstructions(instructions: AIInstruction[]): string {
     let context = `**🤖 AI Instructions:**\n`;
     for (const instruction of instructions) {
-      const scopeLabel = instruction.scope === 'global' ? '🌍 Global' : 
-                        instruction.scope === 'project' ? '📁 Project' : '📂 Category';
+      const scopeLabel =
+        instruction.scope === 'global'
+          ? '🌍 Global'
+          : instruction.scope === 'project'
+            ? '📁 Project'
+            : '📂 Category';
       context += `• ${scopeLabel} [P${instruction.priority}] ${instruction.title}\n  ${instruction.content}\n\n`;
     }
     return context;
@@ -627,9 +673,10 @@ export class ContextServiceImpl implements ContextService {
     for (const memory of memories) {
       context += `• [P${memory.priority}] ${memory.title}\n`;
       if (level !== CONTEXT_DETAIL_LEVELS.BASIC) {
-        const preview = memory.content.length > 200 ? memory.content.substring(0, 200) + '...' : memory.content;
+        const preview =
+          memory.content.length > 200 ? memory.content.substring(0, 200) + '...' : memory.content;
         context += `  ${preview}\n`;
-        context += `  📂 ${memory.category || 'None'} | 🏷️ ${memory.tags?.join(', ') || 'None'}\n`;
+        context += `  📂 ${memory.category || 'None'} | 🏷️ ${Array.isArray(memory.tags) ? memory.tags.join(', ') : memory.tags || 'None'}\n`;
       }
       context += '\n';
     }
@@ -639,17 +686,21 @@ export class ContextServiceImpl implements ContextService {
   private formatProjectTasks(tasks: Task[], level: ContextDetailLevel): string {
     let context = `**📋 Active Project Tasks (${tasks.length}):**\n`;
     for (const task of tasks) {
-      const overdueFlag = task.due_date && new Date(task.due_date) < new Date() ? ' 🔴 OVERDUE' : '';
+      const overdueFlag =
+        task.due_date && new Date(task.due_date) < new Date() ? ' 🔴 OVERDUE' : '';
       const statusEmoji = this.getStatusEmoji(task.status || 'not_started');
-      
+
       context += `• ${statusEmoji} [P${task.priority}] ${task.title}${overdueFlag}\n`;
       if (level !== CONTEXT_DETAIL_LEVELS.BASIC) {
         context += `  Status: ${task.status} | Due: ${task.due_date || 'No due date'}\n`;
         if (task.description) {
-          const preview = task.description.length > 150 ? task.description.substring(0, 150) + '...' : task.description;
+          const preview =
+            task.description.length > 150
+              ? task.description.substring(0, 150) + '...'
+              : task.description;
           context += `  ${preview}\n`;
         }
-        context += `  📂 ${task.category || 'None'} | 🏷️ ${task.tags?.join(', ') || 'None'}\n`;
+        context += `  📂 ${task.category || 'None'} | 🏷️ ${Array.isArray(task.tags) ? task.tags.join(', ') : task.tags || 'None'}\n`;
       }
       context += '\n';
     }
@@ -671,7 +722,7 @@ export class ContextServiceImpl implements ContextService {
     context += `**Project:** ${task.project || 'None'}\n`;
     context += `**Category:** ${task.category || 'None'}\n`;
     context += `**Due Date:** ${task.due_date || 'No due date'}\n`;
-    context += `**Tags:** ${task.tags?.join(', ') || 'None'}\n\n`;
+    context += `**Tags:** ${Array.isArray(task.tags) ? task.tags.join(', ') : task.tags || 'None'}\n\n`;
 
     if (task.description) {
       context += `**📝 Description:**\n${task.description}\n\n`;
@@ -695,7 +746,8 @@ export class ContextServiceImpl implements ContextService {
       const similarity = ((memory as any).similarity_score * 100).toFixed(0);
       context += `• [${similarity}% match] ${memory.title}\n`;
       if (level === CONTEXT_DETAIL_LEVELS.COMPREHENSIVE) {
-        const preview = memory.content.length > 150 ? memory.content.substring(0, 150) + '...' : memory.content;
+        const preview =
+          memory.content.length > 150 ? memory.content.substring(0, 150) + '...' : memory.content;
         context += `  ${preview}\n`;
       }
     }
@@ -706,7 +758,8 @@ export class ContextServiceImpl implements ContextService {
   private formatPriorityTasks(tasks: any[]): string {
     let context = '';
     for (const task of tasks) {
-      const overdueFlag = task.due_date && new Date(task.due_date) < new Date() ? ' 🔴 OVERDUE' : '';
+      const overdueFlag =
+        task.due_date && new Date(task.due_date) < new Date() ? ' 🔴 OVERDUE' : '';
       const statusEmoji = this.getStatusEmoji(task.status || 'not_started');
       context += `• ${statusEmoji} [P${task.priority}] ${task.title}${overdueFlag}\n`;
       context += `  Due: ${task.due_date || 'No due date'} | Project: ${task.project || 'None'}\n`;
@@ -716,24 +769,24 @@ export class ContextServiceImpl implements ContextService {
 
   private getStatusEmoji(status: string): string {
     const statusEmojis: { [key: string]: string } = {
-      'not_started': '⏳',
-      'in_progress': '🔄',
-      'completed': '✅',
-      'cancelled': '❌',
-      'on_hold': '⏸️'
+      not_started: '⏳',
+      in_progress: '🔄',
+      completed: '✅',
+      cancelled: '❌',
+      on_hold: '⏸️',
     };
     return statusEmojis[status] || '⏳';
   }
 }
 
 // Export factory function
-export function createContextService(db: DatabaseManager): ContextService {
+export function createContextService(db: PrismaDatabaseService): ContextService {
   return new ContextServiceImpl(db, embeddingService);
 }
 
 // Export singleton instance
 export const contextService = new ContextServiceImpl(
   // These will be injected when the service is properly initialized
-  {} as DatabaseManager,
+  {} as PrismaDatabaseService,
   embeddingService
 );

@@ -1,6 +1,6 @@
 /**
  * Memory Tool MCP Handlers
- * 
+ *
  * This module contains the MCP tool handlers for all memory-related tools:
  * - store_memory
  * - search_memories
@@ -10,19 +10,19 @@
  * - delete_memory
  * - get_memory_stats
  * - export_memories
- * 
+ *
  * @fileoverview MCP handlers for memory tools with proper validation and error handling
  */
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { MemoryService, createMemoryService } from '../services/memory-service.js';
-import { DatabaseManager } from '../core/database.js';
-import { 
-  createErrorResponse, 
-  validateId, 
+import { PrismaDatabaseService } from '../core/prisma-database.js';
+import {
+  createErrorResponse,
+  validateId,
   validateRequiredString,
   validateOptionalString,
-  handleAsyncError 
+  handleAsyncError,
 } from '../utils/error-handling.js';
 import { ERROR_MESSAGES } from '../utils/constants.js';
 
@@ -250,7 +250,7 @@ export const memoryTools: Tool[] = [
 /**
  * Create memory handlers for MCP server
  */
-export function createMemoryHandlers(db: DatabaseManager) {
+export function createMemoryHandlers(db: PrismaDatabaseService) {
   const memoryService = createMemoryService(db);
 
   return {
@@ -275,7 +275,9 @@ export function createMemoryHandlers(db: DatabaseManager) {
 
         return await memoryService.storeMemory(args);
       } catch (error) {
-        return createErrorResponse(`Failed to store memory: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to store memory: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -301,7 +303,9 @@ export function createMemoryHandlers(db: DatabaseManager) {
 
         return await memoryService.searchMemories(args);
       } catch (error) {
-        return createErrorResponse(`Failed to search memories: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to search memories: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -317,7 +321,9 @@ export function createMemoryHandlers(db: DatabaseManager) {
 
         return await memoryService.listMemories(args);
       } catch (error) {
-        return createErrorResponse(`Failed to list memories: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to list memories: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -330,7 +336,9 @@ export function createMemoryHandlers(db: DatabaseManager) {
 
         return await memoryService.getMemory(args);
       } catch (error) {
-        return createErrorResponse(`Failed to get memory: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to get memory: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -349,14 +357,16 @@ export function createMemoryHandlers(db: DatabaseManager) {
         // Check if at least one field is provided for update
         const updateFields = ['title', 'content', 'category', 'project', 'tags', 'priority'];
         const hasUpdateField = updateFields.some(field => args[field] !== undefined);
-        
+
         if (!hasUpdateField) {
           return createErrorResponse('At least one field must be provided for update');
         }
 
         return await memoryService.updateMemory(args);
       } catch (error) {
-        return createErrorResponse(`Failed to update memory: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to update memory: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -369,7 +379,9 @@ export function createMemoryHandlers(db: DatabaseManager) {
 
         return await memoryService.deleteMemory(args);
       } catch (error) {
-        return createErrorResponse(`Failed to delete memory: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to delete memory: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -377,7 +389,9 @@ export function createMemoryHandlers(db: DatabaseManager) {
       try {
         return await memoryService.getMemoryStats(args);
       } catch (error) {
-        return createErrorResponse(`Failed to get memory stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to get memory stats: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -385,7 +399,9 @@ export function createMemoryHandlers(db: DatabaseManager) {
       try {
         return await memoryService.exportMemories(args);
       } catch (error) {
-        return createErrorResponse(`Failed to export memories: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to export memories: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
   };

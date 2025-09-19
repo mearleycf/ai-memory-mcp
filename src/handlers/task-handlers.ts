@@ -1,6 +1,6 @@
 /**
  * Task Tool MCP Handlers
- * 
+ *
  * This module contains the MCP tool handlers for all task-related tools:
  * - create_task
  * - list_tasks
@@ -12,19 +12,19 @@
  * - delete_task
  * - get_task_stats
  * - export_tasks
- * 
+ *
  * @fileoverview MCP handlers for task tools with proper validation and error handling
  */
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { TaskService, createTaskService } from '../services/task-service.js';
-import { DatabaseManager } from '../core/database.js';
-import { 
-  createErrorResponse, 
-  validateId, 
+import { PrismaDatabaseService } from '../core/prisma-database.js';
+import {
+  createErrorResponse,
+  validateId,
   validateRequiredString,
   validateOptionalString,
-  handleAsyncError 
+  handleAsyncError,
 } from '../utils/error-handling.js';
 import { ERROR_MESSAGES } from '../utils/constants.js';
 
@@ -330,7 +330,7 @@ export const taskTools: Tool[] = [
 /**
  * Create task handlers for MCP server
  */
-export function createTaskHandlers(db: DatabaseManager) {
+export function createTaskHandlers(db: PrismaDatabaseService) {
   const taskService = createTaskService(db);
 
   return {
@@ -355,7 +355,9 @@ export function createTaskHandlers(db: DatabaseManager) {
 
         return await taskService.createTask(args);
       } catch (error) {
-        return createErrorResponse(`Failed to create task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to create task: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -371,7 +373,9 @@ export function createTaskHandlers(db: DatabaseManager) {
 
         return await taskService.listTasks(args);
       } catch (error) {
-        return createErrorResponse(`Failed to list tasks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to list tasks: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -397,7 +401,9 @@ export function createTaskHandlers(db: DatabaseManager) {
 
         return await taskService.searchTasks(args);
       } catch (error) {
-        return createErrorResponse(`Failed to search tasks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to search tasks: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -410,7 +416,9 @@ export function createTaskHandlers(db: DatabaseManager) {
 
         return await taskService.getTask(args);
       } catch (error) {
-        return createErrorResponse(`Failed to get task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to get task: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -432,16 +440,27 @@ export function createTaskHandlers(db: DatabaseManager) {
         }
 
         // Check if at least one field is provided for update
-        const updateFields = ['title', 'description', 'status', 'category', 'project', 'tags', 'priority', 'due_date'];
+        const updateFields = [
+          'title',
+          'description',
+          'status',
+          'category',
+          'project',
+          'tags',
+          'priority',
+          'due_date',
+        ];
         const hasUpdateField = updateFields.some(field => args[field] !== undefined);
-        
+
         if (!hasUpdateField) {
           return createErrorResponse('At least one field must be provided for update');
         }
 
         return await taskService.updateTask(args);
       } catch (error) {
-        return createErrorResponse(`Failed to update task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to update task: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -454,7 +473,9 @@ export function createTaskHandlers(db: DatabaseManager) {
 
         return await taskService.completeTask(args);
       } catch (error) {
-        return createErrorResponse(`Failed to complete task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to complete task: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -467,7 +488,9 @@ export function createTaskHandlers(db: DatabaseManager) {
 
         return await taskService.archiveTask(args);
       } catch (error) {
-        return createErrorResponse(`Failed to archive task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to archive task: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -480,7 +503,9 @@ export function createTaskHandlers(db: DatabaseManager) {
 
         return await taskService.deleteTask(args);
       } catch (error) {
-        return createErrorResponse(`Failed to delete task: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to delete task: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -488,7 +513,9 @@ export function createTaskHandlers(db: DatabaseManager) {
       try {
         return await taskService.getTaskStats(args);
       } catch (error) {
-        return createErrorResponse(`Failed to get task stats: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to get task stats: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
 
@@ -496,7 +523,9 @@ export function createTaskHandlers(db: DatabaseManager) {
       try {
         return await taskService.exportTasks(args);
       } catch (error) {
-        return createErrorResponse(`Failed to export tasks: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        return createErrorResponse(
+          `Failed to export tasks: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
       }
     },
   };
@@ -508,7 +537,7 @@ export function createTaskHandlers(db: DatabaseManager) {
 function isValidDate(dateString: string): boolean {
   const regex = /^\d{4}-\d{2}-\d{2}$/;
   if (!regex.test(dateString)) return false;
-  
+
   const date = new Date(dateString);
   return date instanceof Date && !isNaN(date.getTime());
 }

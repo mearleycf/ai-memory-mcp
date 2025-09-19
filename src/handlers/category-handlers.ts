@@ -1,25 +1,25 @@
 /**
  * Category Tool MCP Handlers
- * 
+ *
  * This module contains the MCP tool handlers for all category-related tools:
  * - create_category
  * - get_category
  * - update_category
  * - delete_category
  * - list_categories
- * 
+ *
  * @fileoverview MCP handlers for category tools with proper validation and error handling
  */
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { CategoryService, createCategoryService } from '../services/category-service.js';
-import { DatabaseManager } from '../core/database.js';
-import { 
-  createErrorResponse, 
-  safeValidateId, 
+import { PrismaDatabaseService } from '../core/prisma-database.js';
+import {
+  createErrorResponse,
+  safeValidateId,
   safeValidateRequiredString,
   safeValidateOptionalString,
-  handleAsyncError 
+  handleAsyncError,
 } from '../utils/error-handling.js';
 import { ERROR_MESSAGES } from '../utils/constants.js';
 
@@ -115,7 +115,7 @@ export const categoryTools: Tool[] = [
 export class CategoryHandlers {
   private categoryService: CategoryService;
 
-  constructor(db: DatabaseManager) {
+  constructor(db: PrismaDatabaseService) {
     this.categoryService = createCategoryService(db);
   }
 
@@ -275,6 +275,6 @@ export class CategoryHandlers {
 /**
  * Factory function to create CategoryHandlers instance
  */
-export function createCategoryHandlers(db: DatabaseManager): CategoryHandlers {
+export function createCategoryHandlers(db: PrismaDatabaseService): CategoryHandlers {
   return new CategoryHandlers(db);
 }

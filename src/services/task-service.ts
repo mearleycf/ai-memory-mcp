@@ -1,16 +1,16 @@
 /**
  * Task Service for AI Memory MCP Server
- * 
+ *
  * This service provides comprehensive task management capabilities,
  * including creation, retrieval, updating, deletion, and semantic search
  * of tasks with embedding integration and status workflow management.
- * 
+ *
  * @fileoverview Task service with semantic search, status workflow, and embedding integration
  */
 
-import { DatabaseManager } from '../core/database.js';
+import { PrismaDatabaseService } from '../core/prisma-database.js';
 import { embeddingService } from '../embedding-service.js';
-import { 
+import {
   Task,
   CreateTaskArgs,
   ListTasksArgs,
@@ -22,14 +22,14 @@ import {
   DeleteTaskArgs,
   GetTaskStatsArgs,
   ExportTasksArgs,
-  MCPResponse
+  MCPResponse,
 } from '../core/types.js';
-import { 
-  AIMemoryError, 
-  createNotFoundError, 
+import {
+  AIMemoryError,
+  createNotFoundError,
   createValidationError,
   handleAsyncError,
-  createMCPResponse
+  createMCPResponse,
 } from '../utils/error-handling.js';
 
 /**
@@ -50,12 +50,12 @@ export interface TaskService {
 
 /**
  * Task Service Implementation
- * 
+ *
  * Provides comprehensive task management with semantic search capabilities,
  * status workflow management, and priority/deadline handling.
  */
 export class TaskServiceImpl implements TaskService {
-  constructor(private db: DatabaseManager) {}
+  constructor(private db: PrismaDatabaseService) {}
 
   /**
    * Create a new task with optional embedding generation
@@ -70,7 +70,7 @@ export class TaskServiceImpl implements TaskService {
         project,
         tags = '',
         priority = 1,
-        due_date
+        due_date,
       } = args;
 
       // Validate required fields
@@ -85,10 +85,10 @@ export class TaskServiceImpl implements TaskService {
 
       // Ensure status exists
       const statusId = await this.ensureStatus(status);
-      
+
       // Ensure category exists
       const categoryId = await this.ensureCategory(category);
-      
+
       // Ensure project exists if provided
       let projectId: number | undefined;
       if (project) {
@@ -99,10 +99,13 @@ export class TaskServiceImpl implements TaskService {
       const tagIds = await this.ensureTags(tags);
 
       // Insert task
-      const result = await this.db.run(`
+      const result = await this.db.run(
+        `
         INSERT INTO tasks (title, description, status_id, category_id, project_id, priority, due_date, created_at, updated_at, archived)
         VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, FALSE)
-      `, [title, description, statusId, categoryId, projectId, priority, due_date]);
+      `,
+        [title, description, statusId, categoryId, projectId, priority, due_date]
+      );
 
       const taskId = result.lastID!;
 
@@ -114,11 +117,14 @@ export class TaskServiceImpl implements TaskService {
       // Generate embedding for semantic search
       try {
         const embedding = await embeddingService.generateEmbedding(`${title}: ${description}`);
-        await this.db.run(`
+        await this.db.run(
+          `
           UPDATE tasks 
           SET embedding = ?, embedding_model = ?, embedding_created_at = CURRENT_TIMESTAMP
           WHERE id = ?
-        `, [JSON.stringify(embedding), embeddingService.getModelName(), taskId]);
+        `,
+          [JSON.stringify(embedding), embeddingService.getModelName(), taskId]
+        );
       } catch (embeddingError) {
         console.warn(`Failed to generate embedding for task ${taskId}:`, embeddingError);
       }
@@ -126,10 +132,7 @@ export class TaskServiceImpl implements TaskService {
       // Get the created task with relations
       const task = await this.getTaskWithRelations(taskId);
 
-      return createMCPResponse(
-        task,
-        `Task "${title}" created successfully`
-      );
+      return createMCPResponse(task, `Task "${title}" created successfully`);
     });
   }
 
@@ -147,7 +150,7 @@ export class TaskServiceImpl implements TaskService {
         overdue_only = false,
         sort_by = 'updated_at',
         sort_order = 'DESC',
-        limit = 50
+        limit = 50,
       } = args;
 
       // Validate sort parameters
@@ -213,13 +216,11 @@ export class TaskServiceImpl implements TaskService {
       const formattedTasks = tasks.map(task => ({
         ...task,
         tags: task.tags ? task.tags.split(',') : [],
-        is_overdue: task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed'
+        is_overdue:
+          task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed',
       }));
 
-      return createMCPResponse(
-        formattedTasks,
-        `Retrieved ${formattedTasks.length} tasks`
-      );
+      return createMCPResponse(formattedTasks, `Retrieved ${formattedTasks.length} tasks`);
     });
   }
 
@@ -228,14 +229,14 @@ export class TaskServiceImpl implements TaskService {
    */
   async searchTasks(args: SearchTasksArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
-      const { 
-        query, 
-        status, 
-        category, 
-        project, 
+      const {
+        query,
+        status,
+        category,
+        project,
         priority_min,
-        limit = 20, 
-        min_similarity = 0.15 
+        limit = 20,
+        min_similarity = 0.15,
       } = args;
 
       if (!query) {
@@ -296,10 +297,7 @@ export class TaskServiceImpl implements TaskService {
       const tasks = await this.db.all(sql, params);
 
       if (tasks.length === 0) {
-        return createMCPResponse(
-          [],
-          'No tasks found matching the criteria'
-        );
+        return createMCPResponse([], 'No tasks found matching the criteria');
       }
 
       // Calculate similarities and filter by minimum similarity
@@ -307,7 +305,10 @@ export class TaskServiceImpl implements TaskService {
         .map(task => {
           try {
             const taskEmbedding = JSON.parse(task.embedding_vector || '[]');
-            const similarity = embeddingService.calculateSimilarity(queryEmbedding.embedding, taskEmbedding.embedding);
+            const similarity = embeddingService.calculateSimilarity(
+              queryEmbedding.embedding,
+              taskEmbedding.embedding
+            );
             return { ...task, similarity };
           } catch (error) {
             console.warn(`Failed to parse embedding for task ${task.id}:`, error);
@@ -323,7 +324,8 @@ export class TaskServiceImpl implements TaskService {
         ...task,
         tags: task.tags ? task.tags.split(',') : [],
         similarity: Math.round(task.similarity * 100) / 100,
-        is_overdue: task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed'
+        is_overdue:
+          task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed',
       }));
 
       return createMCPResponse(
@@ -350,10 +352,7 @@ export class TaskServiceImpl implements TaskService {
         throw createNotFoundError(`Task with ID ${id} not found`);
       }
 
-      return createMCPResponse(
-        task,
-        `Task "${task.title}" retrieved successfully`
-      );
+      return createMCPResponse(task, `Task "${task.title}" retrieved successfully`);
     });
   }
 
@@ -397,7 +396,7 @@ export class TaskServiceImpl implements TaskService {
         const statusId = await this.ensureStatus(status);
         updates.push('status_id = ?');
         params.push(statusId);
-        
+
         // Set completed_at if status is completed
         if (status === 'completed') {
           updates.push('completed_at = CURRENT_TIMESTAMP');
@@ -440,11 +439,14 @@ export class TaskServiceImpl implements TaskService {
       updates.push('updated_at = CURRENT_TIMESTAMP');
       params.push(id);
 
-      await this.db.run(`
+      await this.db.run(
+        `
         UPDATE tasks 
         SET ${updates.join(', ')}
         WHERE id = ?
-      `, params);
+      `,
+        params
+      );
 
       // Update tags if provided
       if (tags !== undefined) {
@@ -457,13 +459,18 @@ export class TaskServiceImpl implements TaskService {
         try {
           const finalTitle = title !== undefined ? title : existing.title;
           const finalDescription = description !== undefined ? description : existing.description;
-          const embedding = await embeddingService.generateEmbedding(`${finalTitle}: ${finalDescription}`);
-          
-          await this.db.run(`
+          const embedding = await embeddingService.generateEmbedding(
+            `${finalTitle}: ${finalDescription}`
+          );
+
+          await this.db.run(
+            `
             UPDATE tasks 
             SET embedding = ?, embedding_model = ?, embedding_created_at = CURRENT_TIMESTAMP
             WHERE id = ?
-          `, [JSON.stringify(embedding), embeddingService.getModelName(), id]);
+          `,
+            [JSON.stringify(embedding), embeddingService.getModelName(), id]
+          );
         } catch (embeddingError) {
           console.warn(`Failed to regenerate embedding for task ${id}:`, embeddingError);
         }
@@ -472,10 +479,7 @@ export class TaskServiceImpl implements TaskService {
       // Get the updated task with relations
       const updatedTask = await this.getTaskWithRelations(id);
 
-      return createMCPResponse(
-        updatedTask,
-        `Task "${updatedTask!.title}" updated successfully`
-      );
+      return createMCPResponse(updatedTask, `Task "${updatedTask!.title}" updated successfully`);
     });
   }
 
@@ -509,10 +513,7 @@ export class TaskServiceImpl implements TaskService {
       // Get the updated task with relations
       const updatedTask = await this.getTaskWithRelations(id);
 
-      return createMCPResponse(
-        updatedTask,
-        `Task "${updatedTask!.title}" completed successfully`
-      );
+      return createMCPResponse(updatedTask, `Task "${updatedTask!.title}" completed successfully`);
     });
   }
 
@@ -576,10 +577,7 @@ export class TaskServiceImpl implements TaskService {
         throw createNotFoundError(`Task with ID ${id} not found`);
       }
 
-      return createMCPResponse(
-        { id },
-        `Task "${existing.title}" deleted successfully`
-      );
+      return createMCPResponse({ id }, `Task "${existing.title}" deleted successfully`);
     });
   }
 
@@ -588,7 +586,9 @@ export class TaskServiceImpl implements TaskService {
    */
   async getTaskStats(args: GetTaskStatsArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
-      const totalTasks = await this.db.get('SELECT COUNT(*) as count FROM tasks WHERE archived = FALSE');
+      const totalTasks = await this.db.get(
+        'SELECT COUNT(*) as count FROM tasks WHERE archived = FALSE'
+      );
       const tasksByStatus = await this.db.all(`
         SELECT s.name as status, COUNT(*) as count 
         FROM tasks t
@@ -630,13 +630,10 @@ export class TaskServiceImpl implements TaskService {
         tasks_by_status: tasksByStatus,
         overdue_tasks: overdueTasks.count,
         completed_today: completedToday.count,
-        priority_distribution: priorityStats
+        priority_distribution: priorityStats,
       };
 
-      return createMCPResponse(
-        stats,
-        'Task statistics retrieved successfully'
-      );
+      return createMCPResponse(stats, 'Task statistics retrieved successfully');
     });
   }
 
@@ -698,13 +695,10 @@ export class TaskServiceImpl implements TaskService {
         created_at: task.created_at,
         updated_at: task.updated_at,
         completed_at: task.completed_at,
-        archived: task.archived
+        archived: task.archived,
       }));
 
-      return createMCPResponse(
-        exportData,
-        `Exported ${exportData.length} tasks`
-      );
+      return createMCPResponse(exportData, `Exported ${exportData.length} tasks`);
     });
   }
 
@@ -712,7 +706,8 @@ export class TaskServiceImpl implements TaskService {
    * Get task with all relations (status, category, project, tags)
    */
   private async getTaskWithRelations(taskId: number): Promise<Task | null> {
-    const task = await this.db.get(`
+    const task = await this.db.get(
+      `
       SELECT 
         t.*,
         s.name as status,
@@ -723,23 +718,28 @@ export class TaskServiceImpl implements TaskService {
       LEFT JOIN categories c ON t.category_id = c.id
       LEFT JOIN projects p ON t.project_id = p.id
       WHERE t.id = ?
-    `, [taskId]);
+    `,
+      [taskId]
+    );
 
     if (!task) {
       return null;
     }
 
     // Get tags
-    const tags = await this.db.all(`
+    const tags = await this.db.all(
+      `
       SELECT t.name 
       FROM task_tags tt
       JOIN tags t ON tt.tag_id = t.id
       WHERE tt.task_id = ?
-    `, [taskId]);
+    `,
+      [taskId]
+    );
 
     return {
       ...task,
-      tags: tags.map(tag => tag.name)
+      tags: tags.map(tag => tag.name),
     };
   }
 
@@ -749,13 +749,10 @@ export class TaskServiceImpl implements TaskService {
   private async updateTaskTags(taskId: number, tagIds: number[]): Promise<void> {
     // Remove existing tags
     await this.db.run('DELETE FROM task_tags WHERE task_id = ?', [taskId]);
-    
+
     // Add new tags
     for (const tagId of tagIds) {
-      await this.db.run(
-        'INSERT INTO task_tags (task_id, tag_id) VALUES (?, ?)',
-        [taskId, tagId]
-      );
+      await this.db.run('INSERT INTO task_tags (task_id, tag_id) VALUES (?, ?)', [taskId, tagId]);
     }
   }
 
@@ -764,18 +761,21 @@ export class TaskServiceImpl implements TaskService {
    */
   private async ensureStatus(statusName: string): Promise<number> {
     let status = await this.db.get('SELECT id FROM statuses WHERE name = ?', [statusName]);
-    
+
     if (!status) {
       const sortOrder = this.getStatusSortOrder(statusName);
       const isCompleted = statusName === 'completed';
-      
-      const result = await this.db.run(`
+
+      const result = await this.db.run(
+        `
         INSERT INTO statuses (name, description, is_completed_status, sort_order, created_at)
         VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-      `, [statusName, `Auto-created status: ${statusName}`, isCompleted, sortOrder]);
+      `,
+        [statusName, `Auto-created status: ${statusName}`, isCompleted, sortOrder]
+      );
       return result.lastID!;
     }
-    
+
     return status.id;
   }
 
@@ -784,11 +784,11 @@ export class TaskServiceImpl implements TaskService {
    */
   private getStatusSortOrder(statusName: string): number {
     const statusOrder: { [key: string]: number } = {
-      'not_started': 1,
-      'in_progress': 2,
-      'completed': 3,
-      'cancelled': 4,
-      'on_hold': 5
+      not_started: 1,
+      in_progress: 2,
+      completed: 3,
+      cancelled: 4,
+      on_hold: 5,
     };
     return statusOrder[statusName] || 99;
   }
@@ -798,15 +798,18 @@ export class TaskServiceImpl implements TaskService {
    */
   private async ensureCategory(categoryName: string): Promise<number> {
     let category = await this.db.get('SELECT id FROM categories WHERE name = ?', [categoryName]);
-    
+
     if (!category) {
-      const result = await this.db.run(`
+      const result = await this.db.run(
+        `
         INSERT INTO categories (name, description, created_at, updated_at)
         VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `, [categoryName, `Auto-created category: ${categoryName}`]);
+      `,
+        [categoryName, `Auto-created category: ${categoryName}`]
+      );
       return result.lastID!;
     }
-    
+
     return category.id;
   }
 
@@ -815,15 +818,18 @@ export class TaskServiceImpl implements TaskService {
    */
   private async ensureProject(projectName: string): Promise<number> {
     let project = await this.db.get('SELECT id FROM projects WHERE name = ?', [projectName]);
-    
+
     if (!project) {
-      const result = await this.db.run(`
+      const result = await this.db.run(
+        `
         INSERT INTO projects (name, description, created_at, updated_at)
         VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `, [projectName, `Auto-created project: ${projectName}`]);
+      `,
+        [projectName, `Auto-created project: ${projectName}`]
+      );
       return result.lastID!;
     }
-    
+
     return project.id;
   }
 
@@ -832,24 +838,30 @@ export class TaskServiceImpl implements TaskService {
    */
   private async ensureTags(tagsString: string): Promise<number[]> {
     if (!tagsString) return [];
-    
-    const tagNames = tagsString.split(',').map(tag => tag.trim()).filter(tag => tag);
+
+    const tagNames = tagsString
+      .split(',')
+      .map(tag => tag.trim())
+      .filter(tag => tag);
     const tagIds: number[] = [];
-    
+
     for (const tagName of tagNames) {
       let tag = await this.db.get('SELECT id FROM tags WHERE name = ?', [tagName]);
-      
+
       if (!tag) {
-        const result = await this.db.run(`
+        const result = await this.db.run(
+          `
           INSERT INTO tags (name, created_at)
           VALUES (?, CURRENT_TIMESTAMP)
-        `, [tagName]);
+        `,
+          [tagName]
+        );
         tagIds.push(result.lastID!);
       } else {
         tagIds.push(tag.id);
       }
     }
-    
+
     return tagIds;
   }
 
@@ -859,7 +871,7 @@ export class TaskServiceImpl implements TaskService {
   private isValidDate(dateString: string): boolean {
     const regex = /^\d{4}-\d{2}-\d{2}$/;
     if (!regex.test(dateString)) return false;
-    
+
     const date = new Date(dateString);
     return date instanceof Date && !isNaN(date.getTime());
   }
@@ -868,6 +880,6 @@ export class TaskServiceImpl implements TaskService {
 /**
  * Create a new task service instance
  */
-export function createTaskService(db: DatabaseManager): TaskService {
+export function createTaskService(db: PrismaDatabaseService): TaskService {
   return new TaskServiceImpl(db);
 }

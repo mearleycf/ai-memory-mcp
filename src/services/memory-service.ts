@@ -1,16 +1,16 @@
 /**
  * Memory Service for AI Memory MCP Server
- * 
+ *
  * This service provides comprehensive memory management capabilities,
  * including creation, retrieval, updating, deletion, and semantic search
  * of memories with embedding integration.
- * 
+ *
  * @fileoverview Memory service with semantic search and embedding integration
  */
 
 import { PrismaDatabaseService } from '../core/prisma-database.js';
 import { embeddingService } from '../embedding-service.js';
-import { 
+import {
   Memory,
   CreateMemoryArgs,
   SearchMemoriesArgs,
@@ -20,14 +20,14 @@ import {
   DeleteMemoryArgs,
   GetMemoryStatsArgs,
   ExportMemoriesArgs,
-  MCPResponse
+  MCPResponse,
 } from '../core/types.js';
-import { 
-  AIMemoryError, 
-  createNotFoundError, 
+import {
+  AIMemoryError,
+  createNotFoundError,
   createValidationError,
   handleAsyncError,
-  createMCPResponse
+  createMCPResponse,
 } from '../utils/error-handling.js';
 
 /**
@@ -46,7 +46,7 @@ export interface MemoryService {
 
 /**
  * Memory Service Implementation
- * 
+ *
  * Provides comprehensive memory management with semantic search capabilities.
  * Integrates with embedding service for intelligent memory retrieval.
  */
@@ -58,14 +58,7 @@ export class MemoryServiceImpl implements MemoryService {
    */
   async storeMemory(args: CreateMemoryArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
-      const {
-        title,
-        content,
-        category = 'general',
-        project,
-        tags = '',
-        priority = 1
-      } = args;
+      const { title, content, category = 'general', project, tags = '', priority = 1 } = args;
 
       // Validate required fields
       if (!title || !content) {
@@ -74,7 +67,7 @@ export class MemoryServiceImpl implements MemoryService {
 
       // Ensure category exists
       const categoryId = await this.ensureCategory(category);
-      
+
       // Ensure project exists if provided
       let projectId: number | undefined;
       if (project) {
@@ -85,7 +78,7 @@ export class MemoryServiceImpl implements MemoryService {
       const tagIds = await this.ensureTags(tags);
 
       // Insert memory
-      const memory = await this.db.client.memory.create({
+      const createdMemory = await this.db.client.memory.create({
         data: {
           title,
           content,
@@ -95,7 +88,7 @@ export class MemoryServiceImpl implements MemoryService {
         },
       });
 
-      const memoryId = memory.id;
+      const memoryId = createdMemory.id;
 
       // Add tags if provided
       if (tagIds.length > 0) {
@@ -118,12 +111,9 @@ export class MemoryServiceImpl implements MemoryService {
       }
 
       // Get the created memory with relations
-      const memory = await this.getMemoryWithRelations(memoryId);
+      const memoryWithRelations = await this.getMemoryWithRelations(memoryId);
 
-      return createMCPResponse(
-        memory,
-        `Memory "${title}" stored successfully`
-      );
+      return createMCPResponse(memoryWithRelations, `Memory "${title}" stored successfully`);
     });
   }
 
@@ -132,14 +122,7 @@ export class MemoryServiceImpl implements MemoryService {
    */
   async searchMemories(args: SearchMemoriesArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
-      const { 
-        query, 
-        category, 
-        project, 
-        priority_min, 
-        limit = 20, 
-        min_similarity = 0.15 
-      } = args;
+      const { query, category, project, priority_min, limit = 20, min_similarity = 0.15 } = args;
 
       if (!query) {
         throw createValidationError('Search query is required');
@@ -194,10 +177,7 @@ export class MemoryServiceImpl implements MemoryService {
       const memories = await this.db.all(sql, params);
 
       if (memories.length === 0) {
-        return createMCPResponse(
-          [],
-          'No memories found matching the criteria'
-        );
+        return createMCPResponse([], 'No memories found matching the criteria');
       }
 
       // Calculate similarities and filter by minimum similarity
@@ -205,7 +185,10 @@ export class MemoryServiceImpl implements MemoryService {
         .map(memory => {
           try {
             const memoryEmbedding = JSON.parse(memory.embedding_vector || '[]');
-            const similarity = embeddingService.calculateSimilarity(queryEmbedding.embedding, memoryEmbedding.embedding);
+            const similarity = embeddingService.calculateSimilarity(
+              queryEmbedding.embedding,
+              memoryEmbedding.embedding
+            );
             return { ...memory, similarity };
           } catch (error) {
             console.warn(`Failed to parse embedding for memory ${memory.id}:`, error);
@@ -220,7 +203,7 @@ export class MemoryServiceImpl implements MemoryService {
       const formattedMemories = memoriesWithSimilarity.map(memory => ({
         ...memory,
         tags: memory.tags ? memory.tags.split(',') : [],
-        similarity: Math.round(memory.similarity * 100) / 100
+        similarity: Math.round(memory.similarity * 100) / 100,
       }));
 
       return createMCPResponse(
@@ -241,7 +224,7 @@ export class MemoryServiceImpl implements MemoryService {
         priority_min,
         sort_by = 'updated_at',
         sort_order = 'DESC',
-        limit = 50
+        limit = 50,
       } = args;
 
       // Validate sort parameters
@@ -295,13 +278,10 @@ export class MemoryServiceImpl implements MemoryService {
       // Format tags
       const formattedMemories = memories.map(memory => ({
         ...memory,
-        tags: memory.tags ? memory.tags.split(',') : []
+        tags: memory.tags ? memory.tags.split(',') : [],
       }));
 
-      return createMCPResponse(
-        formattedMemories,
-        `Retrieved ${formattedMemories.length} memories`
-      );
+      return createMCPResponse(formattedMemories, `Retrieved ${formattedMemories.length} memories`);
     });
   }
 
@@ -322,10 +302,7 @@ export class MemoryServiceImpl implements MemoryService {
         throw createNotFoundError(`Memory with ID ${id} not found`);
       }
 
-      return createMCPResponse(
-        memory,
-        `Memory "${memory.title}" retrieved successfully`
-      );
+      return createMCPResponse(memory, `Memory "${memory.title}" retrieved successfully`);
     });
   }
 
@@ -388,11 +365,14 @@ export class MemoryServiceImpl implements MemoryService {
       updates.push('updated_at = CURRENT_TIMESTAMP');
       params.push(id);
 
-      await this.db.run(`
+      await this.db.run(
+        `
         UPDATE memories 
         SET ${updates.join(', ')}
         WHERE id = ?
-      `, params);
+      `,
+        params
+      );
 
       // Update tags if provided
       if (tags !== undefined) {
@@ -405,13 +385,18 @@ export class MemoryServiceImpl implements MemoryService {
         try {
           const finalTitle = title !== undefined ? title : existing.title;
           const finalContent = content !== undefined ? content : existing.content;
-          const embedding = await embeddingService.generateEmbedding(`${finalTitle}: ${finalContent}`);
-          
-          await this.db.run(`
+          const embedding = await embeddingService.generateEmbedding(
+            `${finalTitle}: ${finalContent}`
+          );
+
+          await this.db.run(
+            `
             UPDATE memories 
             SET embedding = ?, embedding_model = ?, embedding_created_at = CURRENT_TIMESTAMP
             WHERE id = ?
-          `, [JSON.stringify(embedding), embeddingService.getModelName(), id]);
+          `,
+            [JSON.stringify(embedding), embeddingService.getModelName(), id]
+          );
         } catch (embeddingError) {
           console.warn(`Failed to regenerate embedding for memory ${id}:`, embeddingError);
         }
@@ -451,10 +436,7 @@ export class MemoryServiceImpl implements MemoryService {
         throw createNotFoundError(`Memory with ID ${id} not found`);
       }
 
-      return createMCPResponse(
-        { id },
-        `Memory "${existing.title}" deleted successfully`
-      );
+      return createMCPResponse({ id }, `Memory "${existing.title}" deleted successfully`);
     });
   }
 
@@ -496,14 +478,11 @@ export class MemoryServiceImpl implements MemoryService {
         embeddings_generated: embeddingsCount.count,
         priority_distribution: priorityStats,
         recent_activity: {
-          last_7_days: recentActivity.count
-        }
+          last_7_days: recentActivity.count,
+        },
       };
 
-      return createMCPResponse(
-        stats,
-        'Memory statistics retrieved successfully'
-      );
+      return createMCPResponse(stats, 'Memory statistics retrieved successfully');
     });
   }
 
@@ -554,13 +533,10 @@ export class MemoryServiceImpl implements MemoryService {
         priority: memory.priority,
         tags: memory.tags ? memory.tags.split(',') : [],
         created_at: memory.created_at,
-        updated_at: memory.updated_at
+        updated_at: memory.updated_at,
       }));
 
-      return createMCPResponse(
-        exportData,
-        `Exported ${exportData.length} memories`
-      );
+      return createMCPResponse(exportData, `Exported ${exportData.length} memories`);
     });
   }
 
@@ -568,7 +544,8 @@ export class MemoryServiceImpl implements MemoryService {
    * Get memory with all relations (categories, projects, tags)
    */
   private async getMemoryWithRelations(memoryId: number): Promise<Memory | null> {
-    const memory = await this.db.get(`
+    const memory = await this.db.get(
+      `
       SELECT 
         m.*,
         c.name as category,
@@ -577,23 +554,28 @@ export class MemoryServiceImpl implements MemoryService {
       LEFT JOIN categories c ON m.category_id = c.id
       LEFT JOIN projects p ON m.project_id = p.id
       WHERE m.id = ?
-    `, [memoryId]);
+    `,
+      [memoryId]
+    );
 
     if (!memory) {
       return null;
     }
 
     // Get tags
-    const tags = await this.db.all(`
+    const tags = await this.db.all(
+      `
       SELECT t.name 
       FROM memory_tags mt
       JOIN tags t ON mt.tag_id = t.id
       WHERE mt.memory_id = ?
-    `, [memoryId]);
+    `,
+      [memoryId]
+    );
 
     return {
       ...memory,
-      tags: tags.map(tag => tag.name)
+      tags: tags.map(tag => tag.name),
     };
   }
 
@@ -637,6 +619,6 @@ export class MemoryServiceImpl implements MemoryService {
 /**
  * Create a new memory service instance
  */
-export function createMemoryService(db: DatabaseManager): MemoryService {
+export function createMemoryService(db: PrismaDatabaseService): MemoryService {
   return new MemoryServiceImpl(db);
 }

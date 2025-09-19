@@ -30,7 +30,7 @@ import { createStatusTagHandlers, statusTagTools } from './handlers/status-tag-h
 
 class AIMemoryServer {
   private server: Server;
-  private db!: DatabaseManager;
+  private db!: PrismaDatabaseService;
 
   // Services
   private memoryService!: MemoryServiceImpl;
@@ -73,8 +73,9 @@ class AIMemoryServer {
   }
 
   private async setupDatabase() {
-    this.db = new DatabaseManager();
+    this.db = new PrismaDatabaseService();
     await this.db.initialize();
+    await this.db.seedDefaultData();
   }
 
   private initializeServices() {

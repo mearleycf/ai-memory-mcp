@@ -1,23 +1,20 @@
 /**
  * Category Service for AI Memory MCP Server
- * 
+ *
  * This service provides comprehensive category management capabilities,
  * including creation, retrieval, updating, deletion, and listing of categories
  * with statistics integration.
- * 
+ *
  * @fileoverview Category service with database integration and statistics
  */
 
-import { DatabaseManager } from '../core/database.js';
-import { 
-  Category,
-  MCPResponse
-} from '../core/types.js';
-import { 
-  AIMemoryError, 
-  createNotFoundError, 
+import { PrismaDatabaseService } from '../core/prisma-database.js';
+import { Category, MCPResponse } from '../core/types.js';
+import {
+  AIMemoryError,
+  createNotFoundError,
   createValidationError,
-  handleAsyncError 
+  handleAsyncError,
 } from '../utils/error-handling.js';
 
 // Category service argument interfaces
@@ -58,12 +55,12 @@ export interface CategoryService {
 
 /**
  * Category Service Implementation
- * 
+ *
  * Provides comprehensive category management with database integration.
  * Handles category CRUD operations with proper validation and error handling.
  */
 export class CategoryServiceImpl implements CategoryService {
-  constructor(private db: DatabaseManager) {}
+  constructor(private db: PrismaDatabaseService) {}
 
   /**
    * Create a new category
@@ -77,7 +74,7 @@ export class CategoryServiceImpl implements CategoryService {
       }
 
       try {
-        const result = await this.db.dbRun(
+        const result = await this.db.run(
           'INSERT INTO categories (name, description) VALUES (?, ?)',
           [name.toLowerCase().trim(), description]
         );
@@ -120,9 +117,11 @@ export class CategoryServiceImpl implements CategoryService {
 
       let category: Category | null = null;
       if (id) {
-        category = await this.db.dbGet('SELECT * FROM categories WHERE id = ?', [id]);
+        category = await this.db.get('SELECT * FROM categories WHERE id = ?', [id]);
       } else if (name) {
-        category = await this.db.dbGet('SELECT * FROM categories WHERE name = ?', [name.toLowerCase().trim()]);
+        category = await this.db.get('SELECT * FROM categories WHERE name = ?', [
+          name.toLowerCase().trim(),
+        ]);
       }
 
       if (!category) {
@@ -130,8 +129,14 @@ export class CategoryServiceImpl implements CategoryService {
       }
 
       // Get counts
-      const memoryCount = await this.db.dbGet('SELECT COUNT(*) as count FROM memories WHERE category_id = ?', [category.id]);
-      const taskCount = await this.db.dbGet('SELECT COUNT(*) as count FROM tasks WHERE category_id = ? AND archived = FALSE', [category.id]);
+      const memoryCount = await this.db.get(
+        'SELECT COUNT(*) as count FROM memories WHERE category_id = ?',
+        [category.id]
+      );
+      const taskCount = await this.db.get(
+        'SELECT COUNT(*) as count FROM tasks WHERE category_id = ? AND archived = FALSE',
+        [category.id]
+      );
 
       return {
         content: [
@@ -185,7 +190,7 @@ export class CategoryServiceImpl implements CategoryService {
       params.push(id);
 
       try {
-        const result = await this.db.dbRun(
+        const result = await this.db.run(
           `UPDATE categories SET ${updates.join(', ')} WHERE id = ?`,
           params
         );
@@ -252,7 +257,7 @@ export class CategoryServiceImpl implements CategoryService {
    */
   async listCategories(args: ListCategoriesArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
-      const categories = await this.db.dbAll(`
+      const categories = await this.db.all(`
         SELECT 
           c.id,
           c.name,
@@ -280,7 +285,7 @@ export class CategoryServiceImpl implements CategoryService {
           {
             type: 'text',
             text: `Categories:\n${categories
-              .map((cat) => `${cat.name}: ${cat.memory_count} memories, ${cat.task_count} tasks`)
+              .map(cat => `${cat.name}: ${cat.memory_count} memories, ${cat.task_count} tasks`)
               .join('\n')}`,
           },
         ],
@@ -292,6 +297,6 @@ export class CategoryServiceImpl implements CategoryService {
 /**
  * Factory function to create a CategoryService instance
  */
-export function createCategoryService(db: DatabaseManager): CategoryService {
+export function createCategoryService(db: PrismaDatabaseService): CategoryService {
   return new CategoryServiceImpl(db);
 }

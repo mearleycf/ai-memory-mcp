@@ -1,25 +1,25 @@
 /**
  * Project Tool MCP Handlers
- * 
+ *
  * This module contains the MCP tool handlers for all project-related tools:
  * - create_project
  * - list_projects
  * - get_project
  * - update_project
  * - delete_project
- * 
+ *
  * @fileoverview MCP handlers for project tools with proper validation and error handling
  */
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ProjectService, createProjectService } from '../services/project-service.js';
-import { DatabaseManager } from '../core/database.js';
-import { 
-  createErrorResponse, 
-  safeValidateId, 
+import { PrismaDatabaseService } from '../core/prisma-database.js';
+import {
+  createErrorResponse,
+  safeValidateId,
   safeValidateRequiredString,
   safeValidateOptionalString,
-  handleAsyncError 
+  handleAsyncError,
 } from '../utils/error-handling.js';
 import { ERROR_MESSAGES } from '../utils/constants.js';
 
@@ -129,7 +129,7 @@ export const projectTools: Tool[] = [
 export class ProjectHandlers {
   private projectService: ProjectService;
 
-  constructor(db: DatabaseManager) {
+  constructor(db: PrismaDatabaseService) {
     this.projectService = createProjectService(db);
   }
 
@@ -307,6 +307,6 @@ export class ProjectHandlers {
 /**
  * Factory function to create ProjectHandlers instance
  */
-export function createProjectHandlers(db: DatabaseManager): ProjectHandlers {
+export function createProjectHandlers(db: PrismaDatabaseService): ProjectHandlers {
   return new ProjectHandlers(db);
 }

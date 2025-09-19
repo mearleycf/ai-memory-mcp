@@ -1,15 +1,15 @@
 /**
  * AI Instruction Service for AI Memory MCP Server
- * 
+ *
  * This service provides comprehensive AI instruction management capabilities,
  * including creation, retrieval, updating, and deletion of AI instructions
  * with scope-based targeting (global, project, category).
- * 
+ *
  * @fileoverview AI instruction service with scope-based targeting logic
  */
 
-import { DatabaseManager } from '../core/database.js';
-import { 
+import { PrismaDatabaseService } from '../core/prisma-database.js';
+import {
   AIInstruction,
   CreateAIInstructionArgs,
   ListAIInstructionsArgs,
@@ -17,13 +17,13 @@ import {
   UpdateAIInstructionArgs,
   DeleteAIInstructionArgs,
   MCPResponse,
-  AIInstructionScope
+  AIInstructionScope,
 } from '../core/types.js';
-import { 
-  AIMemoryError, 
-  createNotFoundError, 
+import {
+  AIMemoryError,
+  createNotFoundError,
   createValidationError,
-  handleAsyncError 
+  handleAsyncError,
 } from '../utils/error-handling.js';
 
 /**
@@ -39,22 +39,25 @@ export interface AIInstructionService {
 
 /**
  * AI Instruction Service Implementation
- * 
+ *
  * Provides comprehensive AI instruction management with scope-based targeting.
  * Supports global, project-specific, and category-specific instructions.
  */
 export class AIInstructionServiceImpl implements AIInstructionService {
-  constructor(private db: DatabaseManager) {}
+  constructor(private db: PrismaDatabaseService) {}
 
   /**
    * Create a new AI instruction
-   * 
+   *
    * @param args - Creation arguments including title, content, scope, and target
    * @returns Promise resolving to MCP response with creation result
    */
   async createAIInstruction(args: CreateAIInstructionArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
-      console.log('[AI Instruction Service] createAIInstruction called with args:', JSON.stringify(args, null, 2));
+      console.log(
+        '[AI Instruction Service] createAIInstruction called with args:',
+        JSON.stringify(args, null, 2)
+      );
       console.log('[AI Instruction Service] Database manager type:', typeof this.db);
       console.log('[AI Instruction Service] Database manager keys:', Object.keys(this.db));
       console.log('[AI Instruction Service] Database methods available:', {
@@ -63,9 +66,9 @@ export class AIInstructionServiceImpl implements AIInstructionService {
         all: typeof this.db.all,
         dbRun: typeof (this.db as any).dbRun,
         dbGet: typeof (this.db as any).dbGet,
-        dbAll: typeof (this.db as any).dbAll
+        dbAll: typeof (this.db as any).dbAll,
       });
-      
+
       const { title, content, scope, target_name, priority = 1 } = args;
 
       // Validate required fields
@@ -93,19 +96,17 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
       // Resolve target ID for project/category scopes
       if (scope === 'project' && target_name) {
-        const project = await this.db.get(
-          'SELECT id FROM projects WHERE name = ?', 
-          [target_name.toLowerCase()]
-        );
+        const project = await this.db.get('SELECT id FROM projects WHERE name = ?', [
+          target_name.toLowerCase(),
+        ]);
         if (!project) {
           throw createNotFoundError(`Project '${target_name}' not found`);
         }
         target_id = project.id;
       } else if (scope === 'category' && target_name) {
-        const category = await this.db.get(
-          'SELECT id FROM categories WHERE name = ?', 
-          [target_name.toLowerCase()]
-        );
+        const category = await this.db.get('SELECT id FROM categories WHERE name = ?', [
+          target_name.toLowerCase(),
+        ]);
         if (!category) {
           throw createNotFoundError(`Category '${target_name}' not found`);
         }
@@ -113,10 +114,16 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       }
 
       // Create the AI instruction
-      console.log('[AI Instruction Service] About to call this.db.run with params:', [title.trim(), content.trim(), scope, target_id, priority]);
+      console.log('[AI Instruction Service] About to call this.db.run with params:', [
+        title.trim(),
+        content.trim(),
+        scope,
+        target_id,
+        priority,
+      ]);
       console.log('[AI Instruction Service] this.db.run function:', this.db.run);
       console.log('[AI Instruction Service] this.db.run type:', typeof this.db.run);
-      
+
       let result;
       try {
         result = await this.db.run(
@@ -131,17 +138,19 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       }
 
       return {
-        content: [{
-          type: 'text',
-          text: `AI instruction created successfully with ID: ${result.lastID}`,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: `AI instruction created successfully with ID: ${result.lastID}`,
+          },
+        ],
       };
     });
   }
 
   /**
    * List AI instructions with optional filtering
-   * 
+   *
    * @param args - Filtering arguments including scope, project, category, priority
    * @returns Promise resolving to MCP response with formatted instruction list
    */
@@ -189,10 +198,12 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
       if (instructions.length === 0) {
         return {
-          content: [{
-            type: 'text',
-            text: 'No AI instructions found matching the criteria.',
-          }],
+          content: [
+            {
+              type: 'text',
+              text: 'No AI instructions found matching the criteria.',
+            },
+          ],
         };
       }
 
@@ -200,17 +211,19 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       const context = this.formatInstructionList(instructions);
 
       return {
-        content: [{
-          type: 'text',
-          text: context,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: context,
+          },
+        ],
       };
     });
   }
 
   /**
    * Get applicable AI instructions for a specific context
-   * 
+   *
    * @param args - Context arguments including project, category, and global inclusion
    * @returns Promise resolving to MCP response with applicable instructions
    */
@@ -261,10 +274,12 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
       if (instructions.length === 0) {
         return {
-          content: [{
-            type: 'text',
-            text: 'No applicable AI instructions found.',
-          }],
+          content: [
+            {
+              type: 'text',
+              text: 'No applicable AI instructions found.',
+            },
+          ],
         };
       }
 
@@ -272,17 +287,19 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       const context = this.formatApplicableInstructions(instructions);
 
       return {
-        content: [{
-          type: 'text',
-          text: context,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: context,
+          },
+        ],
       };
     });
   }
 
   /**
    * Update an existing AI instruction
-   * 
+   *
    * @param args - Update arguments including ID and fields to update
    * @returns Promise resolving to MCP response with update result
    */
@@ -342,17 +359,19 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       }
 
       return {
-        content: [{
-          type: 'text',
-          text: `AI instruction ${id} updated successfully.`,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: `AI instruction ${id} updated successfully.`,
+          },
+        ],
       };
     });
   }
 
   /**
    * Delete an AI instruction
-   * 
+   *
    * @param args - Delete arguments including instruction ID
    * @returns Promise resolving to MCP response with deletion result
    */
@@ -366,27 +385,26 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       }
 
       // Execute deletion
-      const result = await this.db.run(
-        'DELETE FROM ai_instructions WHERE id = ?', 
-        [id]
-      );
+      const result = await this.db.run('DELETE FROM ai_instructions WHERE id = ?', [id]);
 
       if (result.changes === 0) {
         throw createNotFoundError(`AI instruction with ID ${id} not found`);
       }
 
       return {
-        content: [{
-          type: 'text',
-          text: `AI instruction ${id} deleted successfully.`,
-        }],
+        content: [
+          {
+            type: 'text',
+            text: `AI instruction ${id} deleted successfully.`,
+          },
+        ],
       };
     });
   }
 
   /**
    * Format instruction list for display
-   * 
+   *
    * @param instructions - Array of AI instructions with joined data
    * @returns Formatted string representation
    */
@@ -395,7 +413,7 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
     for (const instruction of instructions) {
       const scopeLabel = this.getScopeLabel(instruction);
-      
+
       context += `**${instruction.id}. ${instruction.title}** [P${instruction.priority}]\n`;
       context += `${scopeLabel}\n`;
       context += `${instruction.content}\n`;
@@ -407,7 +425,7 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
   /**
    * Format applicable instructions for display
-   * 
+   *
    * @param instructions - Array of applicable AI instructions
    * @returns Formatted string representation
    */
@@ -416,7 +434,7 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
     for (const instruction of instructions) {
       const scopeLabel = this.getScopeLabel(instruction);
-      
+
       context += `**${instruction.title}** [P${instruction.priority}]\n`;
       context += `${scopeLabel}\n`;
       context += `${instruction.content}\n\n`;
@@ -427,7 +445,7 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
   /**
    * Get scope label with emoji for display
-   * 
+   *
    * @param instruction - AI instruction with scope and target data
    * @returns Formatted scope label
    */
@@ -447,10 +465,10 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
 /**
  * Create AI instruction service instance
- * 
+ *
  * @param db - Database manager instance
  * @returns Configured AI instruction service
  */
-export function createAIInstructionService(db: DatabaseManager): AIInstructionService {
+export function createAIInstructionService(db: PrismaDatabaseService): AIInstructionService {
   return new AIInstructionServiceImpl(db);
 }

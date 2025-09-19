@@ -1,24 +1,21 @@
 /**
  * Project Service for AI Memory MCP Server
- * 
+ *
  * This service provides comprehensive project management capabilities,
  * including creation, retrieval, updating, deletion, and listing of projects
  * with statistics integration.
- * 
+ *
  * @fileoverview Project service with database integration and statistics
  */
 
-import { DatabaseManager } from '../core/database.js';
-import { 
-  Project,
-  MCPResponse
-} from '../core/types.js';
-import { 
-  AIMemoryError, 
-  createNotFoundError, 
+import { PrismaDatabaseService } from '../core/prisma-database.js';
+import { Project, MCPResponse } from '../core/types.js';
+import {
+  AIMemoryError,
+  createNotFoundError,
   createValidationError,
   handleAsyncError,
-  createMCPResponse
+  createMCPResponse,
 } from '../utils/error-handling.js';
 
 // Project service argument interfaces
@@ -61,12 +58,12 @@ export interface ProjectService {
 
 /**
  * Project Service Implementation
- * 
+ *
  * Provides comprehensive project management with database integration.
  * Handles project CRUD operations with proper validation and error handling.
  */
 export class ProjectServiceImpl implements ProjectService {
-  constructor(private db: DatabaseManager) {}
+  constructor(private db: PrismaDatabaseService) {}
 
   /**
    * Create a new project
@@ -80,7 +77,7 @@ export class ProjectServiceImpl implements ProjectService {
       }
 
       try {
-        const result = await this.db.dbRun(
+        const result = await this.db.run(
           'INSERT INTO projects (name, description, color) VALUES (?, ?, ?)',
           [name.toLowerCase().trim(), description, color]
         );
@@ -118,7 +115,7 @@ export class ProjectServiceImpl implements ProjectService {
       const { include_stats = true } = args;
 
       let sql = 'SELECT * FROM projects';
-      
+
       if (include_stats) {
         sql = `
           SELECT 
@@ -143,13 +140,16 @@ export class ProjectServiceImpl implements ProjectService {
 
       sql += ' ORDER BY p.name';
 
-      const projects = await this.db.dbAll(sql);
+      const projects = await this.db.all(sql);
 
       let output = `Found ${projects.length} projects:\n\n`;
-      
+
       if (include_stats) {
         output += projects
-          .map(p => `📁 ${p.name} (ID: ${p.id})\n${p.description}\nMemories: ${p.memory_count}, Tasks: ${p.task_count}\nCreated: ${p.created_at}\n---`)
+          .map(
+            p =>
+              `📁 ${p.name} (ID: ${p.id})\n${p.description}\nMemories: ${p.memory_count}, Tasks: ${p.task_count}\nCreated: ${p.created_at}\n---`
+          )
           .join('\n\n');
       } else {
         output += projects
@@ -181,9 +181,11 @@ export class ProjectServiceImpl implements ProjectService {
 
       let project: Project | null = null;
       if (id) {
-        project = await this.db.dbGet('SELECT * FROM projects WHERE id = ?', [id]);
+        project = await this.db.get('SELECT * FROM projects WHERE id = ?', [id]);
       } else if (name) {
-        project = await this.db.dbGet('SELECT * FROM projects WHERE name = ?', [name.toLowerCase().trim()]);
+        project = await this.db.get('SELECT * FROM projects WHERE name = ?', [
+          name.toLowerCase().trim(),
+        ]);
       }
 
       if (!project) {
@@ -191,8 +193,14 @@ export class ProjectServiceImpl implements ProjectService {
       }
 
       // Get counts
-      const memoryCount = await this.db.dbGet('SELECT COUNT(*) as count FROM memories WHERE project_id = ?', [project.id]);
-      const taskCount = await this.db.dbGet('SELECT COUNT(*) as count FROM tasks WHERE project_id = ? AND archived = FALSE', [project.id]);
+      const memoryCount = await this.db.get(
+        'SELECT COUNT(*) as count FROM memories WHERE project_id = ?',
+        [project.id]
+      );
+      const taskCount = await this.db.get(
+        'SELECT COUNT(*) as count FROM tasks WHERE project_id = ? AND archived = FALSE',
+        [project.id]
+      );
 
       return {
         content: [
@@ -250,7 +258,7 @@ export class ProjectServiceImpl implements ProjectService {
       params.push(id);
 
       try {
-        const result = await this.db.dbRun(
+        const result = await this.db.run(
           `UPDATE projects SET ${updates.join(', ')} WHERE id = ?`,
           params
         );
@@ -295,7 +303,7 @@ export class ProjectServiceImpl implements ProjectService {
         throw createValidationError('Project ID is required and must be a number');
       }
 
-      const result = await this.db.dbRun('DELETE FROM projects WHERE id = ?', [id]);
+      const result = await this.db.run('DELETE FROM projects WHERE id = ?', [id]);
 
       if (result.changes === 0) {
         throw createNotFoundError(`Project with ID ${id} not found`);
@@ -316,6 +324,6 @@ export class ProjectServiceImpl implements ProjectService {
 /**
  * Factory function to create a ProjectService instance
  */
-export function createProjectService(db: DatabaseManager): ProjectService {
+export function createProjectService(db: PrismaDatabaseService): ProjectService {
   return new ProjectServiceImpl(db);
 }

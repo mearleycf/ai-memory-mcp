@@ -116,38 +116,10 @@ export const memoryTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        category: {
-          type: 'string',
-          description: 'Filter by category name (optional)',
-        },
-        project: {
-          type: 'string',
-          description: 'Filter by project name (optional)',
-        },
-        priority_min: {
-          type: 'number',
-          description: 'Minimum priority level (optional)',
-          minimum: 1,
-          maximum: 5,
-        },
-        sort_by: {
-          type: 'string',
-          enum: ['created_at', 'updated_at', 'title', 'priority'],
-          description: 'Field to sort by (default: updated_at)',
-          default: 'updated_at',
-        },
-        sort_order: {
-          type: 'string',
-          enum: ['ASC', 'DESC'],
-          description: 'Sort order (default: DESC)',
-          default: 'DESC',
-        },
         limit: {
           type: 'number',
-          description: 'Maximum number of results (default: 50)',
-          minimum: 1,
-          maximum: 200,
-          default: 50,
+          description: 'Maximum number of results',
+          default: 10,
         },
       },
     },
@@ -311,18 +283,28 @@ export function createMemoryHandlers(db: PrismaDatabaseService) {
 
     async list_memories(args: any) {
       try {
-        // Validate optional fields
-        if (args.limit && (args.limit < 1 || args.limit > 200)) {
-          return createErrorResponse('Limit must be between 1 and 200');
-        }
-        if (args.priority_min && (args.priority_min < 1 || args.priority_min > 5)) {
-          return createErrorResponse('Priority minimum must be between 1 and 5');
-        }
+        console.log('[DEBUG] Test handler called with args:', args);
 
-        return await memoryService.listMemories(args);
+        // Return hardcoded response to test handler
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                success: true,
+                data: [
+                  { id: 1, title: 'Test Memory 1' },
+                  { id: 2, title: 'Test Memory 2' },
+                ],
+                message: 'Test handler successful',
+              }),
+            },
+          ],
+        };
       } catch (error) {
+        console.error('[ERROR] Test handler failed:', error);
         return createErrorResponse(
-          `Failed to list memories: ${error instanceof Error ? error.message : 'Unknown error'}`
+          `Failed to test list memories: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
       }
     },

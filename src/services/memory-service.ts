@@ -205,7 +205,7 @@ export class MemoryServiceImpl implements MemoryService {
    * List memories with filtering and sorting options
    */
   async listMemories(args: ListMemoriesArgs): Promise<MCPResponse> {
-    return handleAsyncError(async () => {
+    try {
       const {
         category,
         project,
@@ -251,14 +251,24 @@ export class MemoryServiceImpl implements MemoryService {
       const orderBy: any = {};
       orderBy[sort_by] = sort_order.toLowerCase();
 
-      // Test with hardcoded response to isolate the issue
-      const memories = [
-        { id: 1, title: 'Test Memory 1' },
-        { id: 2, title: 'Test Memory 2' },
-      ];
+      // Debug: Start with simplest possible query
+      console.log('[DEBUG] Starting list query...');
 
-      return createMCPResponse(memories, `Retrieved ${memories.length} memories`);
-    });
+      try {
+        const memories = await this.db.client.memory.findMany({
+          take: 2,
+        });
+
+        console.log('[DEBUG] Query completed, found:', memories.length);
+        return createMCPResponse(memories, `Retrieved ${memories.length} memories`);
+      } catch (error) {
+        console.error('[DEBUG] Query failed:', error);
+        throw error;
+      }
+    } catch (error) {
+      console.error('[ERROR] listMemories failed:', error);
+      throw error;
+    }
   }
 
   /**

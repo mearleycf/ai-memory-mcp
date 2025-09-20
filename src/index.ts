@@ -131,7 +131,9 @@ class AIMemoryServer {
             result = await this.memoryHandlers.search_memories(args);
             break;
           case 'list_memories':
+            console.log('[DEBUG] list_memories case reached with args:', args);
             result = await this.memoryHandlers.list_memories(args);
+            console.log('[DEBUG] list_memories result:', result);
             break;
           case 'get_memory':
             result = await this.memoryHandlers.get_memory(args);

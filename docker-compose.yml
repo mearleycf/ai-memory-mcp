@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: ai-memory-postgres
+    environment:
+      POSTGRES_DB: ai_memory
+      POSTGRES_USER: ai_memory_user
+      POSTGRES_PASSWORD: ai_memory_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - '5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ai_memory_user -d ai_memory']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai-memory-network
+
+  ai-memory-server:
+    build: .
+    container_name: ai-memory-server
+    environment:
+      DATABASE_URL: postgresql://ai_memory_user:ai_memory_password@postgres:5432/ai_memory
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - ai-memory-network
+
+  # Optional: Redis for caching (if you want to add caching later)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: ai-memory-redis
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   networks:
+  #     - ai-memory-network
+
+volumes:
+  postgres_data:
+  # redis_data:
+
+networks:
+  ai-memory-network:
+    driver: bridge

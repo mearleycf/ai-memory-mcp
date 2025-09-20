@@ -269,55 +269,42 @@ export class TaskServiceImpl implements TaskService {
       // Generate embedding for the search query
       const queryEmbedding = await embeddingService.generateEmbedding(query);
 
-      // Build the search query with filters
-      let sql = `
-        SELECT 
-          t.*,
-          s.name as status,
-          c.name as category,
-          p.name as project,
-          GROUP_CONCAT(tag.name) as tags,
-          (
-            SELECT json_extract(t.embedding, '$') 
-            FROM tasks t2 
-            WHERE t2.id = t.id
-          ) as embedding_vector
-        FROM tasks t
-        LEFT JOIN statuses s ON t.status_id = s.id
-        LEFT JOIN categories c ON t.category_id = c.id
-        LEFT JOIN projects p ON t.project_id = p.id
-        LEFT JOIN task_tags tt ON t.id = tt.task_id
-        LEFT JOIN tags tag ON tt.tag_id = tag.id
-        WHERE t.embedding IS NOT NULL AND t.archived = FALSE
-      `;
+      // Build where conditions
+      const where: any = {
+        embedding: { not: null },
+        archived: false,
+      };
 
-      const params: any[] = [];
-
-      // Add filters
       if (status) {
-        sql += ` AND s.name = ?`;
-        params.push(status);
+        where.status = { name: status };
       }
 
       if (category) {
-        sql += ` AND c.name = ?`;
-        params.push(category);
+        where.category = { name: category };
       }
 
       if (project) {
-        sql += ` AND p.name = ?`;
-        params.push(project);
+        where.project = { name: project };
       }
 
       if (priority_min) {
-        sql += ` AND t.priority >= ?`;
-        params.push(priority_min);
+        where.priority = { gte: priority_min };
       }
 
-      sql += ` GROUP BY t.id`;
-
       // Get all tasks matching filters
-      const tasks = await this.db.all(sql, params);
+      const tasks = await this.db.client.task.findMany({
+        where,
+        include: {
+          status: true,
+          category: true,
+          project: true,
+          taskTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+      });
 
       if (tasks.length === 0) {
         return createMCPResponse([], 'No tasks found matching the criteria');
@@ -327,7 +314,7 @@ export class TaskServiceImpl implements TaskService {
       const tasksWithSimilarity = tasks
         .map(task => {
           try {
-            const taskEmbedding = JSON.parse(task.embedding_vector || '[]');
+            const taskEmbedding = JSON.parse(task.embedding || '[]');
             const similarity = embeddingService.calculateSimilarity(
               queryEmbedding.embedding,
               taskEmbedding.embedding
@@ -345,10 +332,13 @@ export class TaskServiceImpl implements TaskService {
       // Format tags and add computed fields
       const formattedTasks = tasksWithSimilarity.map(task => ({
         ...task,
-        tags: task.tags ? task.tags.split(',') : [],
+        status: task.status?.name,
+        category: task.category?.name,
+        project: task.project?.name,
+        tags: task.taskTags.map(tt => tt.tag.name),
         similarity: Math.round(task.similarity * 100) / 100,
         is_overdue:
-          task.due_date && new Date(task.due_date) < new Date() && task.status !== 'completed',
+          task.dueDate && new Date(task.dueDate) < new Date() && task.status?.name !== 'completed',
       }));
 
       return createMCPResponse(
@@ -541,26 +531,38 @@ export class TaskServiceImpl implements TaskService {
         throw createValidationError('Valid task ID is required');
       }
 
-      // Check if task exists
-      const existing = await this.db.get('SELECT * FROM tasks WHERE id = ?', [id]);
-      if (!existing) {
-        throw createNotFoundError(`Task with ID ${id} not found`);
+      // Check if task exists and get completed status
+      const completedStatus = await this.db.client.status.findUnique({
+        where: { name: 'completed' },
+      });
+
+      if (!completedStatus) {
+        throw createNotFoundError('Completed status not found');
       }
 
-      const statusId = await this.ensureStatus('completed');
-      const result = await this.db.run(
-        'UPDATE tasks SET status_id = ?, completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [statusId, id]
-      );
-
-      if (result.changes === 0) {
-        throw createNotFoundError(`Task with ID ${id} not found`);
+      let updatedTask;
+      try {
+        updatedTask = await this.db.client.task.update({
+          where: { id },
+          data: {
+            statusId: completedStatus.id,
+            completedAt: new Date(),
+          },
+        });
+      } catch (error: any) {
+        if (error.code === 'P2025') {
+          throw createNotFoundError(`Task with ID ${id} not found`);
+        }
+        throw error;
       }
 
       // Get the updated task with relations
-      const updatedTask = await this.getTaskWithRelations(id);
+      const taskWithRelations = await this.getTaskWithRelations(id);
 
-      return createMCPResponse(updatedTask, `Task "${updatedTask!.title}" completed successfully`);
+      return createMCPResponse(
+        taskWithRelations,
+        `Task "${taskWithRelations!.title}" completed successfully`
+      );
     });
   }
 
@@ -575,19 +577,16 @@ export class TaskServiceImpl implements TaskService {
         throw createValidationError('Valid task ID is required');
       }
 
-      // Check if task exists
-      const existing = await this.db.get('SELECT * FROM tasks WHERE id = ?', [id]);
-      if (!existing) {
-        throw createNotFoundError(`Task with ID ${id} not found`);
-      }
-
-      const result = await this.db.run(
-        'UPDATE tasks SET archived = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-        [archived, id]
-      );
-
-      if (result.changes === 0) {
-        throw createNotFoundError(`Task with ID ${id} not found`);
+      try {
+        await this.db.client.task.update({
+          where: { id },
+          data: { archived },
+        });
+      } catch (error: any) {
+        if (error.code === 'P2025') {
+          throw createNotFoundError(`Task with ID ${id} not found`);
+        }
+        throw error;
       }
 
       // Get the updated task with relations
@@ -611,20 +610,18 @@ export class TaskServiceImpl implements TaskService {
         throw createValidationError('Valid task ID is required');
       }
 
-      // Check if task exists
-      const existing = await this.db.get('SELECT * FROM tasks WHERE id = ?', [id]);
-      if (!existing) {
-        throw createNotFoundError(`Task with ID ${id} not found`);
+      try {
+        await this.db.client.task.delete({
+          where: { id },
+        });
+      } catch (error: any) {
+        if (error.code === 'P2025') {
+          throw createNotFoundError(`Task with ID ${id} not found`);
+        }
+        throw error;
       }
 
-      // Delete task (tags will be deleted automatically due to CASCADE)
-      const result = await this.db.run('DELETE FROM tasks WHERE id = ?', [id]);
-
-      if (result.changes === 0) {
-        throw createNotFoundError(`Task with ID ${id} not found`);
-      }
-
-      return createMCPResponse({ id }, `Task "${existing.title}" deleted successfully`);
+      return createMCPResponse({ id }, `Task with ID ${id} deleted successfully`);
     });
   }
 
@@ -633,51 +630,69 @@ export class TaskServiceImpl implements TaskService {
    */
   async getTaskStats(args: GetTaskStatsArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
-      const totalTasks = await this.db.get(
-        'SELECT COUNT(*) as count FROM tasks WHERE archived = FALSE'
-      );
-      const tasksByStatus = await this.db.all(`
-        SELECT s.name as status, COUNT(*) as count 
-        FROM tasks t
-        JOIN statuses s ON t.status_id = s.id
-        WHERE t.archived = FALSE
-        GROUP BY s.name
-        ORDER BY s.sort_order
-      `);
+      const totalTasks = await this.db.client.task.count({
+        where: { archived: false },
+      });
 
-      const overdueTasks = await this.db.get(`
-        SELECT COUNT(*) as count 
-        FROM tasks t
-        JOIN statuses s ON t.status_id = s.id
-        WHERE t.due_date < date('now') 
-        AND t.due_date IS NOT NULL 
-        AND s.name != 'completed'
-        AND t.archived = FALSE
-      `);
+      const tasksByStatus = await this.db.client.status.findMany({
+        include: {
+          _count: {
+            select: {
+              tasks: {
+                where: { archived: false },
+              },
+            },
+          },
+        },
+        orderBy: { sortOrder: 'asc' },
+      });
 
-      const completedToday = await this.db.get(`
-        SELECT COUNT(*) as count 
-        FROM tasks t
-        JOIN statuses s ON t.status_id = s.id
-        WHERE s.name = 'completed' 
-        AND date(t.completed_at) = date('now')
-        AND t.archived = FALSE
-      `);
+      const overdueTasks = await this.db.client.task.count({
+        where: {
+          archived: false,
+          dueDate: {
+            lt: new Date(),
+            not: null,
+          },
+          status: { name: { not: 'completed' } },
+        },
+      });
 
-      const priorityStats = await this.db.all(`
-        SELECT priority, COUNT(*) as count 
-        FROM tasks 
-        WHERE archived = FALSE
-        GROUP BY priority 
-        ORDER BY priority DESC
-      `);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const completedToday = await this.db.client.task.count({
+        where: {
+          archived: false,
+          status: { name: 'completed' },
+          completedAt: {
+            gte: today,
+            lt: tomorrow,
+          },
+        },
+      });
+
+      const priorityStats = await this.db.client.task.groupBy({
+        by: ['priority'],
+        where: { archived: false },
+        _count: true,
+        orderBy: { priority: 'desc' },
+      });
 
       const stats = {
-        total_tasks: totalTasks.count,
-        tasks_by_status: tasksByStatus,
-        overdue_tasks: overdueTasks.count,
-        completed_today: completedToday.count,
-        priority_distribution: priorityStats,
+        total_tasks: totalTasks,
+        tasks_by_status: tasksByStatus.map(status => ({
+          status: status.name,
+          count: status._count.tasks,
+        })),
+        overdue_tasks: overdueTasks,
+        completed_today: completedToday,
+        priority_distribution: priorityStats.map(stat => ({
+          priority: stat.priority,
+          count: stat._count,
+        })),
       };
 
       return createMCPResponse(stats, 'Task statistics retrieved successfully');
@@ -691,57 +706,52 @@ export class TaskServiceImpl implements TaskService {
     return handleAsyncError(async () => {
       const { status, category, project, include_archived = false } = args;
 
-      let sql = `
-        SELECT 
-          t.*,
-          s.name as status,
-          c.name as category,
-          p.name as project,
-          GROUP_CONCAT(tag.name) as tags
-        FROM tasks t
-        LEFT JOIN statuses s ON t.status_id = s.id
-        LEFT JOIN categories c ON t.category_id = c.id
-        LEFT JOIN projects p ON t.project_id = p.id
-        LEFT JOIN task_tags tt ON t.id = tt.task_id
-        LEFT JOIN tags tag ON tt.tag_id = tag.id
-        WHERE t.archived = ?
-      `;
-
-      const params: any[] = [include_archived];
+      // Build where conditions
+      const where: any = {
+        archived: include_archived,
+      };
 
       if (status) {
-        sql += ` AND s.name = ?`;
-        params.push(status);
+        where.status = { name: status };
       }
 
       if (category) {
-        sql += ` AND c.name = ?`;
-        params.push(category);
+        where.category = { name: category };
       }
 
       if (project) {
-        sql += ` AND p.name = ?`;
-        params.push(project);
+        where.project = { name: project };
       }
 
-      sql += ` GROUP BY t.id ORDER BY t.created_at DESC`;
-
-      const tasks = await this.db.all(sql, params);
+      const tasks = await this.db.client.task.findMany({
+        where,
+        include: {
+          status: true,
+          category: true,
+          project: true,
+          taskTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
 
       // Format tags and remove embedding data for export
       const exportData = tasks.map(task => ({
         id: task.id,
         title: task.title,
         description: task.description,
-        status: task.status,
-        category: task.category,
-        project: task.project,
+        status: task.status?.name,
+        category: task.category?.name,
+        project: task.project?.name,
         priority: task.priority,
-        due_date: task.due_date,
-        tags: task.tags ? task.tags.split(',') : [],
-        created_at: task.created_at,
-        updated_at: task.updated_at,
-        completed_at: task.completed_at,
+        due_date: task.dueDate?.toISOString().split('T')[0],
+        tags: task.taskTags.map(tt => tt.tag.name),
+        created_at: task.createdAt.toISOString(),
+        updated_at: task.updatedAt.toISOString(),
+        completed_at: task.completedAt?.toISOString(),
         archived: task.archived,
       }));
 

@@ -54,21 +54,6 @@ export class AIInstructionServiceImpl implements AIInstructionService {
    */
   async createAIInstruction(args: CreateAIInstructionArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
-      console.log(
-        '[AI Instruction Service] createAIInstruction called with args:',
-        JSON.stringify(args, null, 2)
-      );
-      console.log('[AI Instruction Service] Database manager type:', typeof this.db);
-      console.log('[AI Instruction Service] Database manager keys:', Object.keys(this.db));
-      console.log('[AI Instruction Service] Database methods available:', {
-        run: typeof this.db.run,
-        get: typeof this.db.get,
-        all: typeof this.db.all,
-        dbRun: typeof (this.db as any).dbRun,
-        dbGet: typeof (this.db as any).dbGet,
-        dbAll: typeof (this.db as any).dbAll,
-      });
-
       const { title, content, scope, target_name, priority = 1 } = args;
 
       // Validate required fields
@@ -96,17 +81,17 @@ export class AIInstructionServiceImpl implements AIInstructionService {
 
       // Resolve target ID for project/category scopes
       if (scope === 'project' && target_name) {
-        const project = await this.db.get('SELECT id FROM projects WHERE name = ?', [
-          target_name.toLowerCase(),
-        ]);
+        const project = await this.db.client.project.findUnique({
+          where: { name: target_name.toLowerCase() },
+        });
         if (!project) {
           throw createNotFoundError(`Project '${target_name}' not found`);
         }
         target_id = project.id;
       } else if (scope === 'category' && target_name) {
-        const category = await this.db.get('SELECT id FROM categories WHERE name = ?', [
-          target_name.toLowerCase(),
-        ]);
+        const category = await this.db.client.category.findUnique({
+          where: { name: target_name.toLowerCase() },
+        });
         if (!category) {
           throw createNotFoundError(`Category '${target_name}' not found`);
         }
@@ -114,34 +99,21 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       }
 
       // Create the AI instruction
-      console.log('[AI Instruction Service] About to call this.db.run with params:', [
-        title.trim(),
-        content.trim(),
-        scope,
-        target_id,
-        priority,
-      ]);
-      console.log('[AI Instruction Service] this.db.run function:', this.db.run);
-      console.log('[AI Instruction Service] this.db.run type:', typeof this.db.run);
-
-      let result;
-      try {
-        result = await this.db.run(
-          'INSERT INTO ai_instructions (title, content, scope, target_id, priority) VALUES (?, ?, ?, ?, ?)',
-          [title.trim(), content.trim(), scope, target_id, priority]
-        );
-        console.log('[AI Instruction Service] Database insert successful, result:', result);
-      } catch (dbError) {
-        console.error('[AI Instruction Service] Database error:', dbError);
-        console.error('[AI Instruction Service] Database error stack:', (dbError as Error).stack);
-        throw dbError;
-      }
+      const instruction = await this.db.client.aIInstruction.create({
+        data: {
+          title: title.trim(),
+          content: content.trim(),
+          scope,
+          targetId: target_id,
+          priority,
+        },
+      });
 
       return {
         content: [
           {
             type: 'text',
-            text: `AI instruction created successfully with ID: ${result.lastID}`,
+            text: `AI instruction created successfully with ID: ${instruction.id}`,
           },
         ],
       };
@@ -158,43 +130,50 @@ export class AIInstructionServiceImpl implements AIInstructionService {
     return handleAsyncError(async () => {
       const { scope, project, category, priority_min } = args;
 
-      // Build dynamic SQL query with filters
-      let sql = `
-        SELECT 
-          ai.*,
-          p.name as project_name,
-          c.name as category_name
-        FROM ai_instructions ai
-        LEFT JOIN projects p ON ai.target_id = p.id AND ai.scope = 'project'
-        LEFT JOIN categories c ON ai.target_id = c.id AND ai.scope = 'category'
-        WHERE 1=1
-      `;
-      const params: any[] = [];
+      // Build where conditions
+      const where: any = {};
 
-      // Apply filters
       if (scope) {
-        sql += ` AND ai.scope = ?`;
-        params.push(scope);
-      }
-
-      if (project) {
-        sql += ` AND p.name = ?`;
-        params.push(project.toLowerCase());
-      }
-
-      if (category) {
-        sql += ` AND c.name = ?`;
-        params.push(category.toLowerCase());
+        where.scope = scope;
       }
 
       if (priority_min) {
-        sql += ` AND ai.priority >= ?`;
-        params.push(priority_min);
+        where.priority = { gte: priority_min };
       }
 
-      sql += ` ORDER BY ai.priority DESC, ai.created_at DESC`;
+      // Handle project and category filters
+      if (project || category) {
+        where.OR = [];
 
-      const instructions = await this.db.all(sql, params);
+        if (project) {
+          const projectData = await this.db.client.project.findUnique({
+            where: { name: project.toLowerCase() },
+          });
+          if (projectData) {
+            where.OR.push({
+              scope: 'project',
+              targetId: projectData.id,
+            });
+          }
+        }
+
+        if (category) {
+          const categoryData = await this.db.client.category.findUnique({
+            where: { name: category.toLowerCase() },
+          });
+          if (categoryData) {
+            where.OR.push({
+              scope: 'category',
+              targetId: categoryData.id,
+            });
+          }
+        }
+      }
+
+      const instructions = await this.db.client.aIInstruction.findMany({
+        where,
+        orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      });
 
       if (instructions.length === 0) {
         return {
@@ -231,46 +210,57 @@ export class AIInstructionServiceImpl implements AIInstructionService {
     return handleAsyncError(async () => {
       const { project, category, include_global = true } = args;
 
-      // Build dynamic SQL query for applicable instructions
-      let sql = `
-        SELECT 
-          ai.*,
-          p.name as project_name,
-          c.name as category_name
-        FROM ai_instructions ai
-        LEFT JOIN projects p ON ai.target_id = p.id AND ai.scope = 'project'
-        LEFT JOIN categories c ON ai.target_id = c.id AND ai.scope = 'category'
-        WHERE 1=1
-      `;
-      const params: any[] = [];
-
-      const conditions: string[] = [];
+      // Build where conditions for applicable instructions
+      const whereConditions: any[] = [];
 
       // Add global instructions if requested
       if (include_global) {
-        conditions.push("ai.scope = 'global'");
+        whereConditions.push({ scope: 'global' });
       }
 
       // Add project-specific instructions
       if (project) {
-        conditions.push("(ai.scope = 'project' AND p.name = ?)");
-        params.push(project.toLowerCase());
+        const projectData = await this.db.client.project.findUnique({
+          where: { name: project.toLowerCase() },
+        });
+        if (projectData) {
+          whereConditions.push({
+            scope: 'project',
+            targetId: projectData.id,
+          });
+        }
       }
 
       // Add category-specific instructions
       if (category) {
-        conditions.push("(ai.scope = 'category' AND c.name = ?)");
-        params.push(category.toLowerCase());
+        const categoryData = await this.db.client.category.findUnique({
+          where: { name: category.toLowerCase() },
+        });
+        if (categoryData) {
+          whereConditions.push({
+            scope: 'category',
+            targetId: categoryData.id,
+          });
+        }
       }
 
-      // Apply conditions
-      if (conditions.length > 0) {
-        sql += ` AND (${conditions.join(' OR ')})`;
+      if (whereConditions.length === 0) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'No applicable AI instructions found.',
+            },
+          ],
+        };
       }
 
-      sql += ` ORDER BY ai.priority DESC, ai.created_at DESC`;
-
-      const instructions = await this.db.all(sql, params);
+      const instructions = await this.db.client.aIInstruction.findMany({
+        where: {
+          OR: whereConditions,
+        },
+        orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+      });
 
       if (instructions.length === 0) {
         return {
@@ -283,8 +273,8 @@ export class AIInstructionServiceImpl implements AIInstructionService {
         };
       }
 
-      // Format applicable instructions
-      const context = this.formatApplicableInstructions(instructions);
+      // Format applicable instructions with resolved target names
+      const context = await this.formatApplicableInstructionsWithTargets(instructions);
 
       return {
         content: [
@@ -312,60 +302,55 @@ export class AIInstructionServiceImpl implements AIInstructionService {
         throw createValidationError('Valid instruction ID is required');
       }
 
-      // Build dynamic update query
-      const updates: string[] = [];
-      const params: any[] = [];
+      // Build update data object
+      const updateData: any = {};
 
       if (title !== undefined) {
         if (!title?.trim()) {
           throw createValidationError('Title cannot be empty');
         }
-        updates.push('title = ?');
-        params.push(title.trim());
+        updateData.title = title.trim();
       }
 
       if (content !== undefined) {
         if (!content?.trim()) {
           throw createValidationError('Content cannot be empty');
         }
-        updates.push('content = ?');
-        params.push(content.trim());
+        updateData.content = content.trim();
       }
 
       if (priority !== undefined) {
         if (priority < 1 || priority > 5) {
           throw createValidationError('Priority must be between 1 and 5');
         }
-        updates.push('priority = ?');
-        params.push(priority);
+        updateData.priority = priority;
       }
 
-      if (updates.length === 0) {
+      if (Object.keys(updateData).length === 0) {
         throw createValidationError('No updates provided');
       }
 
-      // Add timestamp update
-      updates.push('updated_at = CURRENT_TIMESTAMP');
-      params.push(id);
+      try {
+        await this.db.client.aIInstruction.update({
+          where: { id },
+          data: updateData,
+        });
 
-      // Execute update
-      const result = await this.db.run(
-        `UPDATE ai_instructions SET ${updates.join(', ')} WHERE id = ?`,
-        params
-      );
-
-      if (result.changes === 0) {
-        throw createNotFoundError(`AI instruction with ID ${id} not found`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `AI instruction ${id} updated successfully.`,
+            },
+          ],
+        };
+      } catch (error: any) {
+        if (error.code === 'P2025') {
+          // Record not found
+          throw createNotFoundError(`AI instruction with ID ${id} not found`);
+        }
+        throw error;
       }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `AI instruction ${id} updated successfully.`,
-          },
-        ],
-      };
     });
   }
 
@@ -384,21 +369,26 @@ export class AIInstructionServiceImpl implements AIInstructionService {
         throw createValidationError('Valid instruction ID is required');
       }
 
-      // Execute deletion
-      const result = await this.db.run('DELETE FROM ai_instructions WHERE id = ?', [id]);
+      try {
+        await this.db.client.aIInstruction.delete({
+          where: { id },
+        });
 
-      if (result.changes === 0) {
-        throw createNotFoundError(`AI instruction with ID ${id} not found`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `AI instruction ${id} deleted successfully.`,
+            },
+          ],
+        };
+      } catch (error: any) {
+        if (error.code === 'P2025') {
+          // Record not found
+          throw createNotFoundError(`AI instruction with ID ${id} not found`);
+        }
+        throw error;
       }
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `AI instruction ${id} deleted successfully.`,
-          },
-        ],
-      };
     });
   }
 
@@ -417,7 +407,7 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       context += `**${instruction.id}. ${instruction.title}** [P${instruction.priority}]\n`;
       context += `${scopeLabel}\n`;
       context += `${instruction.content}\n`;
-      context += `Created: ${instruction.created_at}\n\n`;
+      context += `Created: ${instruction.createdAt}\n\n`;
     }
 
     return context;
@@ -444,6 +434,26 @@ export class AIInstructionServiceImpl implements AIInstructionService {
   }
 
   /**
+   * Format applicable instructions for display with resolved target names
+   *
+   * @param instructions - Array of applicable AI instructions
+   * @returns Formatted string representation
+   */
+  private async formatApplicableInstructionsWithTargets(instructions: any[]): Promise<string> {
+    let context = `🤖 **Applicable AI Instructions:**\n\n`;
+
+    for (const instruction of instructions) {
+      const scopeLabel = await this.getScopeLabelWithTarget(instruction);
+
+      context += `**${instruction.title}** [P${instruction.priority}]\n`;
+      context += `${scopeLabel}\n`;
+      context += `${instruction.content}\n\n`;
+    }
+
+    return context;
+  }
+
+  /**
    * Get scope label with emoji for display
    *
    * @param instruction - AI instruction with scope and target data
@@ -454,9 +464,40 @@ export class AIInstructionServiceImpl implements AIInstructionService {
       case 'global':
         return '🌍 Global';
       case 'project':
-        return `📁 Project: ${instruction.project_name}`;
+        return `📁 Project: ${instruction.project_name || 'Unknown'}`;
       case 'category':
-        return `📂 Category: ${instruction.category_name}`;
+        return `📂 Category: ${instruction.category_name || 'Unknown'}`;
+      default:
+        return `🔧 ${instruction.scope}`;
+    }
+  }
+
+  /**
+   * Get scope label with emoji for display, resolving target names from targetId
+   *
+   * @param instruction - AI instruction with scope and targetId
+   * @returns Formatted scope label
+   */
+  private async getScopeLabelWithTarget(instruction: any): Promise<string> {
+    switch (instruction.scope) {
+      case 'global':
+        return '🌍 Global';
+      case 'project':
+        if (instruction.targetId) {
+          const project = await this.db.client.project.findUnique({
+            where: { id: instruction.targetId },
+          });
+          return `📁 Project: ${project?.name || 'Unknown'}`;
+        }
+        return '📁 Project: Unknown';
+      case 'category':
+        if (instruction.targetId) {
+          const category = await this.db.client.category.findUnique({
+            where: { id: instruction.targetId },
+          });
+          return `📂 Category: ${category?.name || 'Unknown'}`;
+        }
+        return '📂 Category: Unknown';
       default:
         return `🔧 ${instruction.scope}`;
     }

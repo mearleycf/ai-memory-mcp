@@ -358,7 +358,7 @@ Get category "technical"
 
 ## Database Location & Backup
 
-- **Database File**: `~/.ai-memory.db` (SQLite)
+- **Database**: PostgreSQL database (configured via `DATABASE_URL`)
 - **Automatic Backups**: Migration creates timestamped backups
 - **Manual Backup**: Copy the `.ai-memory.db` file
 - **Export Options**: Use export tools for JSON backups with full relationship data
@@ -426,7 +426,7 @@ npm run dev           # Development mode
 
 - **Local Storage**: All data stored locally on your machine
 - **No External Calls**: No data sent to external services
-- **File Permissions**: Standard SQLite file permissions apply
+- **File Permissions**: Standard PostgreSQL database permissions apply
 - **Backup Strategy**: Regular backups recommended for important data
 
 ## Version History

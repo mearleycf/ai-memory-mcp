@@ -291,7 +291,7 @@ All context tools are **fully functional** in the current monolithic files:
 ### **Embedding Infrastructure**
 
 - ✅ **Service**: `embedding-service.ts` (258 lines - proper size)
-- ✅ **Vector Storage**: JSON serialized embeddings in SQLite
+- ✅ **Vector Storage**: JSON serialized embeddings in PostgreSQL
 - ✅ **Semantic Search**: Cosine similarity with configurable thresholds
 - ✅ **Performance**: Efficient similarity calculations
 

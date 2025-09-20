@@ -10,7 +10,6 @@ build/
 
 # Database
 *.db
-*.sqlite
 
 # Environment files
 .env

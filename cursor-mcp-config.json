@@ -2,7 +2,7 @@
   "mcpServers": {
     "ai-memory": {
       "command": "node",
-      "args": ["dist/index-with-context-tools.js"],
+      "args": ["dist/index.js"],
       "cwd": "/Users/mikeearley/code/mcp_servers/ai-memory-mcp"
     },
     "mcpjungle": {

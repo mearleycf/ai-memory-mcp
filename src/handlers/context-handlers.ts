@@ -1,22 +1,18 @@
 /**
  * Context Tool MCP Handlers
- * 
+ *
  * This module contains the MCP tool handlers for context management:
  * - get_project_context
  * - get_task_context
  * - get_memory_context
  * - get_work_priorities
- * 
+ *
  * @fileoverview MCP handlers for context tools with proper validation and error handling
  */
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { ContextService } from '../services/context-service.js';
-import { 
-  createErrorResponse, 
-  validateId,
-  handleAsyncError 
-} from '../utils/error-handling.js';
+import { createErrorResponse, validateId, handleAsyncError } from '../utils/error-handling.js';
 
 /**
  * Context tool definitions for MCP
@@ -24,13 +20,22 @@ import {
 export const contextTools: Tool[] = [
   {
     name: 'get_project_context',
-    description: 'Get comprehensive context for a specific project including memories, tasks, and AI instructions',
+    description:
+      'Get comprehensive context for a specific project including memories, tasks, and AI instructions',
     inputSchema: {
       type: 'object',
       properties: {
         project: { type: 'string', description: 'Project name to get context for' },
-        level: { type: 'string', description: 'Context level: basic, standard, comprehensive', default: 'standard' },
-        include_completed: { type: 'boolean', description: 'Include completed tasks', default: false },
+        level: {
+          type: 'string',
+          description: 'Context level: basic, standard, comprehensive',
+          default: 'standard',
+        },
+        include_completed: {
+          type: 'boolean',
+          description: 'Include completed tasks',
+          default: false,
+        },
         max_items: { type: 'number', description: 'Maximum items to return per type', default: 10 },
       },
       required: ['project'],
@@ -46,7 +51,23 @@ export const contextTools: Tool[] = [
           type: 'number',
           description: 'Task ID to get context for',
         },
+        level: {
+          type: 'string',
+          description: 'Context level: basic, standard, comprehensive',
+          default: 'standard',
+        },
+        include_related: {
+          type: 'boolean',
+          description: 'Include related tasks and memories',
+          default: true,
+        },
+        semantic_search: {
+          type: 'boolean',
+          description: 'Use semantic search for related content',
+          default: true,
+        },
       },
+      required: ['task_id'],
     },
   },
   {
@@ -59,7 +80,23 @@ export const contextTools: Tool[] = [
           type: 'number',
           description: 'Memory ID to get context for',
         },
+        level: {
+          type: 'string',
+          description: 'Context level: basic, standard, comprehensive',
+          default: 'standard',
+        },
+        include_related: {
+          type: 'boolean',
+          description: 'Include related tasks and memories',
+          default: true,
+        },
+        semantic_search: {
+          type: 'boolean',
+          description: 'Use semantic search for related content',
+          default: true,
+        },
       },
+      required: ['memory_id'],
     },
   },
   {
@@ -97,7 +134,7 @@ export function createContextHandlers(contextService: ContextService) {
 
     async get_memory_context(args: any) {
       return handleAsyncError(async () => {
-        return await contextService.getMemoryContext(args);
+        return await contextService.getSpecificMemoryContext(args);
       });
     },
 

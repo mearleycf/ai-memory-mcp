@@ -45,10 +45,16 @@ PORT=3000
 ### 3. Start the Services
 
 ```bash
-# Build and start all services (PostgreSQL + AI Memory Server)
+# Option 1: Automated setup (Bash)
+./docker-start.sh
+
+# Option 2: Automated setup (Fish shell)
+./docker-start.fish
+
+# Option 3: NPM script
 npm run docker:up
 
-# Or manually:
+# Option 4: Manual
 docker-compose up -d
 ```
 

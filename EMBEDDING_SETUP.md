@@ -17,7 +17,7 @@ This guide covers the setup and usage of the new **semantic search capabilities*
 ### **Technical Implementation**
 
 - **Model**: `all-MiniLM-L6-v2` (384 dimensions, offline, fast)
-- **Storage**: JSON columns in SQLite (portable, no external dependencies)
+- **Storage**: JSON columns in PostgreSQL (with proper vector support)
 - **Similarity**: Cosine similarity with configurable thresholds
 - **Performance**: Async generation, batched processing, memory-efficient
 

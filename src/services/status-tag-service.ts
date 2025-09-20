@@ -20,7 +20,9 @@ export class StatusTagServiceImpl implements StatusTagService {
 
   async listStatuses(): Promise<MCPResponse | ErrorResponse> {
     return handleAsyncError(async () => {
-      const statuses = await this.db.all('SELECT * FROM statuses ORDER BY sort_order');
+      const statuses = await this.db.client.status.findMany({
+        orderBy: { sortOrder: 'asc' },
+      });
 
       return createMCPResponse(statuses, `Found ${statuses.length} task statuses`);
     });
@@ -28,28 +30,28 @@ export class StatusTagServiceImpl implements StatusTagService {
 
   async listTags(): Promise<MCPResponse | ErrorResponse> {
     return handleAsyncError(async () => {
-      const tags = await this.db.all(`
-        SELECT 
-          t.id,
-          t.name,
-          COALESCE(m.memory_count, 0) as memory_count,
-          COALESCE(tk.task_count, 0) as task_count,
-          t.created_at
-        FROM tags t
-        LEFT JOIN (
-          SELECT tag_id, COUNT(*) as memory_count 
-          FROM memory_tags 
-          GROUP BY tag_id
-        ) m ON t.id = m.tag_id
-        LEFT JOIN (
-          SELECT tag_id, COUNT(*) as task_count 
-          FROM task_tags 
-          GROUP BY tag_id
-        ) tk ON t.id = tk.tag_id
-        ORDER BY t.name
-      `);
+      const tags = await this.db.client.tag.findMany({
+        include: {
+          _count: {
+            select: {
+              memoryTags: true,
+              taskTags: true,
+            },
+          },
+        },
+        orderBy: { name: 'asc' },
+      });
 
-      return createMCPResponse(tags, `Found ${tags.length} tags`);
+      // Format the response to match the expected structure
+      const formattedTags = tags.map(tag => ({
+        id: tag.id,
+        name: tag.name,
+        memory_count: tag._count.memoryTags,
+        task_count: tag._count.taskTags,
+        created_at: tag.createdAt,
+      }));
+
+      return createMCPResponse(formattedTags, `Found ${formattedTags.length} tags`);
     });
   }
 
@@ -57,68 +59,58 @@ export class StatusTagServiceImpl implements StatusTagService {
     return handleAsyncError(async () => {
       const { id, name } = args;
 
-      let result;
-      if (id) {
-        result = await this.db.run('DELETE FROM tags WHERE id = ?', [id]);
-      } else if (name) {
-        result = await this.db.run('DELETE FROM tags WHERE name = ?', [name.toLowerCase().trim()]);
-      } else {
+      if (!id && !name) {
         return createErrorResponse('Either id or name must be provided');
       }
 
-      if (result.changes === 0) {
-        return createErrorResponse('Tag not found');
-      }
+      try {
+        if (id) {
+          await this.db.client.tag.delete({
+            where: { id },
+          });
+        } else if (name) {
+          await this.db.client.tag.delete({
+            where: { name: name.toLowerCase().trim() },
+          });
+        }
 
-      return createMCPResponse({ deleted: true }, `Tag deleted successfully`);
+        return createMCPResponse({ deleted: true }, `Tag deleted successfully`);
+      } catch (error: any) {
+        if (error.code === 'P2025') {
+          // Record not found
+          return createErrorResponse('Tag not found');
+        }
+        throw error;
+      }
     });
   }
 
   async updateMemoryTags(memoryId: number, tagIds: number[]): Promise<void> {
-    // Remove existing tags
-    await this.db.run('DELETE FROM memory_tags WHERE memory_id = ?', [memoryId]);
-
-    // Add new tags
-    for (const tagId of tagIds) {
-      await this.db.run('INSERT INTO memory_tags (memory_id, tag_id) VALUES (?, ?)', [
-        memoryId,
-        tagId,
-      ]);
-    }
+    // Use the existing method from PrismaDatabaseService
+    await this.db.updateMemoryTags(memoryId, tagIds);
   }
 
   async getMemoryWithRelations(memoryId: number): Promise<any> {
-    const memory = await this.db.get(
-      `
-      SELECT 
-        m.*,
-        c.name as category,
-        p.name as project
-      FROM memories m
-      LEFT JOIN categories c ON m.category_id = c.id
-      LEFT JOIN projects p ON m.project_id = p.id
-      WHERE m.id = ?
-    `,
-      [memoryId]
-    );
+    const memory = await this.db.client.memory.findUnique({
+      where: { id: memoryId },
+      include: {
+        category: true,
+        project: true,
+        memoryTags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
+    });
 
     if (!memory) return null;
 
-    // Get tags for this memory
-    const tags = await this.db.all(
-      `
-      SELECT t.name 
-      FROM tags t
-      JOIN memory_tags mt ON t.id = mt.tag_id
-      WHERE mt.memory_id = ?
-      ORDER BY t.name
-    `,
-      [memoryId]
-    );
-
     return {
       ...memory,
-      tags: tags.map((t: any) => t.name),
+      category: memory.category?.name,
+      project: memory.project?.name,
+      tags: memory.memoryTags.map(mt => mt.tag.name),
     };
   }
 }

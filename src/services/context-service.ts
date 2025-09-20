@@ -33,6 +33,7 @@ export interface ContextService {
   getProjectContext(args: ProjectContextArgs): Promise<ContextResponse>;
   getTaskContext(args: TaskContextArgs): Promise<ContextResponse>;
   getMemoryContext(args: MemoryContextArgs): Promise<ContextResponse>;
+  getSpecificMemoryContext(args: SpecificMemoryContextArgs): Promise<ContextResponse>;
   getWorkPriorities(args: WorkPrioritiesArgs): Promise<ContextResponse>;
 }
 
@@ -66,6 +67,16 @@ export interface MemoryContextArgs {
   priority_min?: number;
   limit?: number;
   min_similarity?: number;
+}
+
+/**
+ * Specific memory context arguments
+ */
+export interface SpecificMemoryContextArgs {
+  memory_id: number;
+  level?: ContextDetailLevel;
+  include_related?: boolean;
+  semantic_search?: boolean;
 }
 
 /**
@@ -314,6 +325,61 @@ export class ContextServiceImpl implements ContextService {
   }
 
   /**
+   * Get comprehensive context for a specific memory including related tasks and project info
+   */
+  async getSpecificMemoryContext(args: SpecificMemoryContextArgs): Promise<ContextResponse> {
+    return handleAsyncError(async () => {
+      const {
+        memory_id,
+        level = CONTEXT_DETAIL_LEVELS.STANDARD,
+        include_related = true,
+        semantic_search = true,
+      } = args;
+
+      // Validate inputs
+      if (!memory_id || memory_id <= 0) {
+        throw createValidationError('Valid memory ID is required');
+      }
+
+      // Get memory details with relations
+      const memory = await this.database.getMemoryWithRelations(memory_id);
+      if (!memory) {
+        throw createNotFoundError('Memory', memory_id);
+      }
+
+      const priorityEmoji = this.getPriorityEmoji(memory.priority);
+
+      let context = `${priorityEmoji} **Memory Context: ${memory.title}**\n\n`;
+      context += this.formatMemoryDetails(memory);
+
+      // Get related tasks if requested
+      if (include_related) {
+        const relatedTasks = await this.getRelatedTasksForMemory(memory_id, level);
+        if (relatedTasks.length > 0) {
+          context += this.formatRelatedTasks(relatedTasks);
+        }
+      }
+
+      // Get related memories if requested and semantic search is enabled
+      if (include_related && semantic_search) {
+        const relatedMemories = await this.getRelatedMemoriesForMemory(memory_id, level);
+        if (relatedMemories.length > 0) {
+          context += this.formatRelatedMemories(relatedMemories, level);
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: context,
+          },
+        ],
+      };
+    }, 'getSpecificMemoryContext');
+  }
+
+  /**
    * Get work priorities with advanced urgency scoring
    */
   async getWorkPriorities(args: WorkPrioritiesArgs): Promise<ContextResponse> {
@@ -403,31 +469,30 @@ export class ContextServiceImpl implements ContextService {
   // Private helper methods
 
   private async getProjectAIInstructions(projectId: number): Promise<AIInstruction[]> {
-    return this.database.all(
-      `
-      SELECT * FROM ai_instructions 
-      WHERE (scope = 'global') OR (scope = 'project' AND target_id = ?)
-      ORDER BY priority DESC, created_at DESC
-    `,
-      [projectId]
-    );
+    const instructions = await this.database.client.aIInstruction.findMany({
+      where: {
+        OR: [{ scope: 'global' }, { scope: 'project', targetId: projectId }],
+      },
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+    });
+    return instructions as any;
   }
 
   private async getProjectMemories(projectId: number, maxItems: number): Promise<Memory[]> {
-    return this.database.all(
-      `
-      SELECT m.*, c.name as category, GROUP_CONCAT(t.name, ', ') as tags
-      FROM memories m
-      LEFT JOIN categories c ON m.category_id = c.id
-      LEFT JOIN memory_tags mt ON m.id = mt.memory_id
-      LEFT JOIN tags t ON mt.tag_id = t.id
-      WHERE m.project_id = ?
-      GROUP BY m.id
-      ORDER BY m.priority DESC, m.updated_at DESC
-      LIMIT ?
-    `,
-      [projectId, maxItems]
-    );
+    const memories = await this.database.client.memory.findMany({
+      where: { projectId },
+      include: {
+        category: true,
+        memoryTags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
+      orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+      take: maxItems,
+    });
+    return memories as any;
   }
 
   private async getProjectTasks(
@@ -435,76 +500,121 @@ export class ContextServiceImpl implements ContextService {
     maxItems: number,
     includeCompleted: boolean
   ): Promise<Task[]> {
-    const taskStatusFilter = includeCompleted ? '' : " AND s.name != 'completed'";
-    return this.database.all(
-      `
-      SELECT t.*, s.name as status, c.name as category, GROUP_CONCAT(tag.name, ', ') as tags
-      FROM tasks t
-      LEFT JOIN statuses s ON t.status_id = s.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN task_tags tt ON t.id = tt.task_id
-      LEFT JOIN tags tag ON tt.tag_id = tag.id
-      WHERE t.project_id = ? AND t.archived = FALSE ${taskStatusFilter}
-      GROUP BY t.id
-      ORDER BY 
-        CASE 
-          WHEN t.due_date IS NOT NULL AND t.due_date < date('now') THEN 1 
-          ELSE 2 
-        END,
-        t.priority DESC, 
-        t.due_date ASC,
-        t.updated_at DESC
-      LIMIT ?
-    `,
-      [projectId, maxItems]
-    );
+    const where: any = {
+      projectId,
+      archived: false,
+    };
+
+    if (!includeCompleted) {
+      where.status = { name: { not: 'completed' } };
+    }
+
+    const tasks = await this.database.client.task.findMany({
+      where,
+      include: {
+        status: true,
+        category: true,
+        taskTags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
+      orderBy: [{ dueDate: 'asc' }, { priority: 'desc' }, { updatedAt: 'desc' }],
+      take: maxItems,
+    });
+    return tasks as any;
   }
 
   private async getProjectStatistics(projectId: number): Promise<any> {
-    return this.database.get(
-      `
-      SELECT 
-        COUNT(DISTINCT m.id) as memory_count,
-        COUNT(DISTINCT t.id) as task_count,
-        COUNT(DISTINCT CASE WHEN s.name = 'completed' THEN t.id END) as completed_tasks,
-        COUNT(DISTINCT CASE WHEN t.due_date < date('now') AND s.name != 'completed' THEN t.id END) as overdue_tasks
-      FROM projects p
-      LEFT JOIN memories m ON p.id = m.project_id
-      LEFT JOIN tasks t ON p.id = t.project_id AND t.archived = FALSE
-      LEFT JOIN statuses s ON t.status_id = s.id
-      WHERE p.id = ?
-    `,
-      [projectId]
-    );
+    const [memoryCount, taskCount, completedTasks, overdueTasks] = await Promise.all([
+      this.database.client.memory.count({
+        where: { projectId },
+      }),
+      this.database.client.task.count({
+        where: { projectId, archived: false },
+      }),
+      this.database.client.task.count({
+        where: {
+          projectId,
+          archived: false,
+          status: { name: 'completed' },
+        },
+      }),
+      this.database.client.task.count({
+        where: {
+          projectId,
+          archived: false,
+          dueDate: { lt: new Date() },
+          status: { name: { not: 'completed' } },
+        },
+      }),
+    ]);
+
+    return {
+      memory_count: memoryCount,
+      task_count: taskCount,
+      completed_tasks: completedTasks,
+      overdue_tasks: overdueTasks,
+    };
   }
 
   private async getTaskAIInstructions(task: Task): Promise<AIInstruction[]> {
-    return this.database.all(
-      `
-      SELECT ai.* FROM ai_instructions ai
-      LEFT JOIN projects p ON ai.target_id = p.id AND ai.scope = 'project'
-      LEFT JOIN categories c ON ai.target_id = c.id AND ai.scope = 'category'
-      WHERE ai.scope = 'global'
-      OR (ai.scope = 'project' AND p.name = ?)
-      OR (ai.scope = 'category' AND c.name = ?)
-      ORDER BY ai.priority DESC, ai.created_at DESC
-    `,
-      [task.project || '', task.category || '']
-    );
+    const whereConditions: any[] = [{ scope: 'global' }];
+
+    if (task.project) {
+      // Get project ID by name - handle both string and object cases
+      const projectName =
+        typeof task.project === 'string' ? task.project : (task.project as any).name;
+      const project = await this.database.client.project.findFirst({
+        where: { name: projectName },
+      });
+      if (project) {
+        whereConditions.push({
+          scope: 'project',
+          targetId: project.id,
+        });
+      }
+    }
+
+    if (task.category) {
+      // Get category ID by name - handle both string and object cases
+      const categoryName =
+        typeof task.category === 'string' ? task.category : (task.category as any).name;
+      const category = await this.database.client.category.findFirst({
+        where: { name: categoryName },
+      });
+      if (category) {
+        whereConditions.push({
+          scope: 'category',
+          targetId: category.id,
+        });
+      }
+    }
+
+    const instructions = await this.database.client.aIInstruction.findMany({
+      where: {
+        OR: whereConditions,
+      },
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+    });
+    return instructions as any;
   }
 
   private async getRelatedTasks(projectId: number, excludeTaskId: number): Promise<Task[]> {
-    return this.database.all(
-      `
-      SELECT t.*, s.name as status
-      FROM tasks t
-      LEFT JOIN statuses s ON t.status_id = s.id
-      WHERE t.project_id = ? AND t.id != ? AND t.archived = FALSE
-      ORDER BY t.priority DESC, t.updated_at DESC
-      LIMIT 5
-    `,
-      [projectId, excludeTaskId]
-    );
+    const tasks = await this.database.client.task.findMany({
+      where: {
+        projectId,
+        id: { not: excludeTaskId },
+        archived: false,
+      },
+      include: {
+        status: true,
+      },
+      orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+      take: 5,
+    });
+    return tasks as any;
   }
 
   private async getSemanticMemories(
@@ -521,90 +631,99 @@ export class ContextServiceImpl implements ContextService {
     filters: { category?: string; project?: string; priority_min?: number },
     limit: number
   ): Promise<Memory[]> {
-    let sql = `
-      SELECT 
-        m.*,
-        c.name as category,
-        p.name as project,
-        GROUP_CONCAT(t.name, ', ') as tags
-      FROM memories m
-      LEFT JOIN categories c ON m.category_id = c.id
-      LEFT JOIN projects p ON m.project_id = p.id
-      LEFT JOIN memory_tags mt ON m.id = mt.memory_id
-      LEFT JOIN tags t ON mt.tag_id = t.id
-      WHERE (m.title LIKE ? OR m.content LIKE ? OR c.name LIKE ? OR p.name LIKE ? OR t.name LIKE ?)
-      AND m.priority >= ?
-    `;
-    const params = [
-      `%${topic}%`,
-      `%${topic}%`,
-      `%${topic}%`,
-      `%${topic}%`,
-      `%${topic}%`,
-      filters.priority_min || 1,
-    ];
+    const where: any = {
+      priority: { gte: filters.priority_min || 1 },
+      OR: [
+        { title: { contains: topic, mode: 'insensitive' } },
+        { content: { contains: topic, mode: 'insensitive' } },
+        { category: { name: { contains: topic, mode: 'insensitive' } } },
+        { project: { name: { contains: topic, mode: 'insensitive' } } },
+        { memoryTags: { tag: { name: { contains: topic, mode: 'insensitive' } } } },
+      ],
+    };
 
     if (filters.category) {
-      sql += ` AND c.name = ?`;
-      params.push(filters.category.toLowerCase());
+      where.category = { name: filters.category.toLowerCase() };
     }
 
     if (filters.project) {
-      sql += ` AND p.name = ?`;
-      params.push(filters.project.toLowerCase());
+      where.project = { name: filters.project.toLowerCase() };
     }
 
-    sql += ` GROUP BY m.id ORDER BY m.priority DESC, m.updated_at DESC LIMIT ?`;
-    params.push(limit);
-
-    return this.database.all(sql, params);
+    const memories = await this.database.client.memory.findMany({
+      where,
+      include: {
+        category: true,
+        project: true,
+        memoryTags: {
+          include: {
+            tag: true,
+          },
+        },
+      },
+      orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
+      take: limit,
+    });
+    return memories as any;
   }
 
   private async getTasksByTimeHorizon(
     timeHorizon: TimeHorizon,
     filters: { category?: string; project?: string; priority_min?: number }
   ): Promise<Task[]> {
-    let dateFilter = '';
-    const params: any[] = [];
+    const where: any = {
+      archived: false,
+      status: { name: { not: 'completed' } },
+      priority: { gte: filters.priority_min || 1 },
+    };
 
+    // Add date filters based on time horizon
+    const now = new Date();
     switch (timeHorizon) {
       case TIME_HORIZONS.TODAY:
-        dateFilter = "AND t.due_date = date('now')";
+        const today = new Date(now);
+        today.setHours(0, 0, 0, 0);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        where.dueDate = {
+          gte: today,
+          lt: tomorrow,
+        };
         break;
       case TIME_HORIZONS.WEEK:
-        dateFilter = "AND t.due_date <= date('now', '+7 days')";
+        const weekFromNow = new Date(now);
+        weekFromNow.setDate(weekFromNow.getDate() + 7);
+        where.dueDate = {
+          lte: weekFromNow,
+        };
         break;
       case TIME_HORIZONS.MONTH:
-        dateFilter = "AND t.due_date <= date('now', '+30 days')";
+        const monthFromNow = new Date(now);
+        monthFromNow.setDate(monthFromNow.getDate() + 30);
+        where.dueDate = {
+          lte: monthFromNow,
+        };
         break;
-      default:
-        dateFilter = '';
     }
 
-    let sql = `
-      SELECT t.*, s.name as status, c.name as category, p.name as project
-      FROM tasks t
-      LEFT JOIN statuses s ON t.status_id = s.id
-      LEFT JOIN categories c ON t.category_id = c.id
-      LEFT JOIN projects p ON t.project_id = p.id
-      WHERE t.archived = FALSE AND s.name != 'completed' ${dateFilter}
-      AND t.priority >= ?
-    `;
-    params.push(filters.priority_min || 1);
-
     if (filters.category) {
-      sql += ` AND c.name = ?`;
-      params.push(filters.category.toLowerCase());
+      where.category = { name: filters.category.toLowerCase() };
     }
 
     if (filters.project) {
-      sql += ` AND p.name = ?`;
-      params.push(filters.project.toLowerCase());
+      where.project = { name: filters.project.toLowerCase() };
     }
 
-    sql += ` ORDER BY t.priority DESC, t.due_date ASC, t.updated_at DESC`;
-
-    return this.database.all(sql, params);
+    const tasks = await this.database.client.task.findMany({
+      where,
+      include: {
+        status: true,
+        category: true,
+        project: true,
+      },
+      orderBy: [{ priority: 'desc' }, { dueDate: 'asc' }, { updatedAt: 'desc' }],
+    });
+    return tasks as any;
   }
 
   private calculateUrgencyScore(task: Task): number {
@@ -776,6 +895,89 @@ export class ContextServiceImpl implements ContextService {
       on_hold: '⏸️',
     };
     return statusEmojis[status] || '⏳';
+  }
+
+  private getPriorityEmoji(priority: number): string {
+    if (priority >= 5) return '🔴';
+    if (priority >= 4) return '🟠';
+    if (priority >= 3) return '🟡';
+    if (priority >= 2) return '🟢';
+    return '⚪';
+  }
+
+  private formatMemoryDetails(memory: Memory): string {
+    let context = `**Priority:** ${memory.priority}/5\n`;
+    context += `**Project:** ${memory.project || 'None'}\n`;
+    context += `**Category:** ${memory.category || 'None'}\n`;
+    context += `**Tags:** ${Array.isArray(memory.tags) ? memory.tags.join(', ') : memory.tags || 'None'}\n\n`;
+
+    if (memory.content) {
+      context += `**📝 Content:**\n${memory.content}\n\n`;
+    }
+    return context;
+  }
+
+  private async getRelatedTasksForMemory(
+    memoryId: number,
+    level: ContextDetailLevel
+  ): Promise<Task[]> {
+    // Get tasks from the same project as the memory
+    const memory = await this.database.getMemoryWithRelations(memoryId);
+    if (!memory || !memory.project) {
+      return [];
+    }
+
+    return await this.database.getTasksByProject(memory.project.name, {
+      limit:
+        level === CONTEXT_DETAIL_LEVELS.BASIC
+          ? 3
+          : level === CONTEXT_DETAIL_LEVELS.STANDARD
+            ? 5
+            : 10,
+    });
+  }
+
+  private async getRelatedMemoriesForMemory(
+    memoryId: number,
+    level: ContextDetailLevel
+  ): Promise<Memory[]> {
+    // Get memories from the same project and category as the target memory
+    const memory = await this.database.getMemoryWithRelations(memoryId);
+    if (!memory) {
+      return [];
+    }
+
+    const filters: any = {};
+    if (memory.project) {
+      filters.project = memory.project.name;
+    }
+    if (memory.category) {
+      filters.category = memory.category.name;
+    }
+
+    return await this.database.getMemoriesByFilters(filters, {
+      limit:
+        level === CONTEXT_DETAIL_LEVELS.BASIC
+          ? 3
+          : level === CONTEXT_DETAIL_LEVELS.STANDARD
+            ? 5
+            : 10,
+    });
+  }
+
+  private formatRelatedMemories(memories: Memory[], level: ContextDetailLevel): string {
+    let context = `**💭 Related Memories:**\n`;
+    for (const memory of memories) {
+      const priorityEmoji = this.getPriorityEmoji(memory.priority);
+      context += `• ${priorityEmoji} [P${memory.priority}] ${memory.title}\n`;
+      if (level !== CONTEXT_DETAIL_LEVELS.BASIC && memory.content) {
+        const preview =
+          memory.content.length > 100 ? memory.content.substring(0, 100) + '...' : memory.content;
+        context += `  ${preview}\n`;
+      }
+    }
+    context += '\n';
+    return context;
   }
 }
 

@@ -133,6 +133,99 @@ export class PrismaDatabaseService {
   }
 
   /**
+   * Get memory with relations
+   */
+  async getMemoryWithRelations(memoryId: number): Promise<any> {
+    return handleAsyncError(async () => {
+      return await this.prisma.memory.findUnique({
+        where: { id: memoryId },
+        include: {
+          category: true,
+          project: true,
+          memoryTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+      });
+    }, 'PrismaDatabaseService.getMemoryWithRelations');
+  }
+
+  /**
+   * Get tasks by project
+   */
+  async getTasksByProject(projectName: string, options: { limit?: number } = {}): Promise<any[]> {
+    return handleAsyncError(async () => {
+      const project = await this.prisma.project.findUnique({
+        where: { name: projectName.toLowerCase() },
+      });
+
+      if (!project) {
+        return [];
+      }
+
+      return await this.prisma.task.findMany({
+        where: { projectId: project.id },
+        include: {
+          status: true,
+          category: true,
+          project: true,
+          taskTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+        take: options.limit || 10,
+        orderBy: { updatedAt: 'desc' },
+      });
+    }, 'PrismaDatabaseService.getTasksByProject');
+  }
+
+  /**
+   * Get memories by filters
+   */
+  async getMemoriesByFilters(filters: any, options: { limit?: number } = {}): Promise<any[]> {
+    return handleAsyncError(async () => {
+      const where: any = {};
+
+      if (filters.project) {
+        const project = await this.prisma.project.findUnique({
+          where: { name: filters.project.toLowerCase() },
+        });
+        if (project) {
+          where.projectId = project.id;
+        }
+      }
+
+      if (filters.category) {
+        const category = await this.prisma.category.findUnique({
+          where: { name: filters.category.toLowerCase() },
+        });
+        if (category) {
+          where.categoryId = category.id;
+        }
+      }
+
+      return await this.prisma.memory.findMany({
+        where,
+        include: {
+          category: true,
+          project: true,
+          memoryTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+        take: options.limit || 10,
+        orderBy: { updatedAt: 'desc' },
+      });
+    }, 'PrismaDatabaseService.getMemoriesByFilters');
+  }
+
+  /**
    * Ensure category exists, create if not found
    */
   async ensureCategory(categoryName: string): Promise<number | null> {
@@ -279,57 +372,5 @@ export class PrismaDatabaseService {
         });
       }
     }, 'PrismaDatabaseService.updateTaskTags');
-  }
-
-  // Compatibility methods for services that expect raw SQL interface
-  // These methods provide a bridge between the old SQL-based services and Prisma
-
-  /**
-   * Execute a raw SQL query and return all results
-   * Note: This is a compatibility method for services that haven't been fully migrated to Prisma
-   */
-  async all(sql: string, params: any[] = []): Promise<any[]> {
-    return handleAsyncError(async () => {
-      // For now, we'll use Prisma's raw query capability
-      // In the future, these should be converted to proper Prisma queries
-      const result = await this.prisma.$queryRawUnsafe(sql, ...params);
-      return Array.isArray(result) ? result : [];
-    }, 'PrismaDatabaseService.all');
-  }
-
-  /**
-   * Execute a raw SQL query and return the first result
-   * Note: This is a compatibility method for services that haven't been fully migrated to Prisma
-   */
-  async get(sql: string, params: any[] = []): Promise<any> {
-    return handleAsyncError(async () => {
-      const results = await this.all(sql, params);
-      return results.length > 0 ? results[0] : null;
-    }, 'PrismaDatabaseService.get');
-  }
-
-  /**
-   * Execute a raw SQL query (INSERT, UPDATE, DELETE)
-   * Note: This is a compatibility method for services that haven't been fully migrated to Prisma
-   */
-  async run(sql: string, params: any[] = []): Promise<{ lastID?: number; changes: number }> {
-    return handleAsyncError(async () => {
-      // For raw SQL execution, we need to use Prisma's raw query
-      // Note: This doesn't return lastID/changes like SQLite, but we'll simulate it
-      await this.prisma.$executeRawUnsafe(sql, ...params);
-
-      // Try to extract lastID from INSERT statements
-      let lastID: number | undefined;
-      if (sql.trim().toUpperCase().startsWith('INSERT')) {
-        // For INSERT statements, we can try to get the last inserted ID
-        // This is a simplified approach - in production, you'd want more sophisticated handling
-        const result = await this.prisma.$queryRawUnsafe('SELECT last_insert_rowid() as id');
-        if (Array.isArray(result) && result.length > 0) {
-          lastID = (result[0] as any).id;
-        }
-      }
-
-      return { lastID, changes: 1 }; // Simplified - we can't easily get exact changes count
-    }, 'PrismaDatabaseService.run');
   }
 }

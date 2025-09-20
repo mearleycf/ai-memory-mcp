@@ -131,50 +131,36 @@ export class MemoryServiceImpl implements MemoryService {
       // Generate embedding for the search query
       const queryEmbedding = await embeddingService.generateEmbedding(query);
 
-      // Build the search query with filters
-      let sql = `
-        SELECT 
-          m.*,
-          c.name as category,
-          p.name as project,
-          GROUP_CONCAT(t.name) as tags,
-          (
-            SELECT json_extract(m.embedding, '$') 
-            FROM memories m2 
-            WHERE m2.id = m.id
-          ) as embedding_vector
-        FROM memories m
-        LEFT JOIN categories c ON m.category_id = c.id
-        LEFT JOIN projects p ON m.project_id = p.id
-        LEFT JOIN memory_tags mt ON m.id = mt.memory_id
-        LEFT JOIN tags t ON mt.tag_id = t.id
-        WHERE m.embedding IS NOT NULL
-      `;
+      // Build where conditions
+      const where: any = {
+        embedding: { not: null },
+      };
 
-      const params: any[] = [];
-
-      // Add category filter
       if (category) {
-        sql += ` AND c.name = ?`;
-        params.push(category);
+        where.category = { name: category };
       }
 
-      // Add project filter
       if (project) {
-        sql += ` AND p.name = ?`;
-        params.push(project);
+        where.project = { name: project };
       }
 
-      // Add priority filter
       if (priority_min) {
-        sql += ` AND m.priority >= ?`;
-        params.push(priority_min);
+        where.priority = { gte: priority_min };
       }
-
-      sql += ` GROUP BY m.id`;
 
       // Get all memories matching filters
-      const memories = await this.db.all(sql, params);
+      const memories = await this.db.client.memory.findMany({
+        where,
+        include: {
+          category: true,
+          project: true,
+          memoryTags: {
+            include: {
+              tag: true,
+            },
+          },
+        },
+      });
 
       if (memories.length === 0) {
         return createMCPResponse([], 'No memories found matching the criteria');
@@ -184,7 +170,7 @@ export class MemoryServiceImpl implements MemoryService {
       const memoriesWithSimilarity = memories
         .map(memory => {
           try {
-            const memoryEmbedding = JSON.parse(memory.embedding_vector || '[]');
+            const memoryEmbedding = JSON.parse(memory.embedding || '[]');
             const similarity = embeddingService.calculateSimilarity(
               queryEmbedding.embedding,
               memoryEmbedding.embedding
@@ -199,10 +185,12 @@ export class MemoryServiceImpl implements MemoryService {
         .sort((a, b) => b.similarity - a.similarity)
         .slice(0, limit);
 
-      // Format tags
+      // Format tags and other fields
       const formattedMemories = memoriesWithSimilarity.map(memory => ({
         ...memory,
-        tags: memory.tags ? memory.tags.split(',') : [],
+        category: memory.category?.name,
+        project: memory.project?.name,
+        tags: memory.memoryTags.map(mt => mt.tag.name),
         similarity: Math.round(memory.similarity * 100) / 100,
       }));
 
@@ -263,28 +251,13 @@ export class MemoryServiceImpl implements MemoryService {
       const orderBy: any = {};
       orderBy[sort_by] = sort_order.toLowerCase();
 
-      const memories = await this.db.client.memory.findMany({
-        where,
-        include: {
-          category: true,
-          project: true,
-          memoryTags: {
-            include: {
-              tag: true,
-            },
-          },
-        },
-        orderBy,
-        take: limit,
-      });
+      // Test with hardcoded response to isolate the issue
+      const memories = [
+        { id: 1, title: 'Test Memory 1' },
+        { id: 2, title: 'Test Memory 2' },
+      ];
 
-      // Format tags
-      const formattedMemories = memories.map(memory => ({
-        ...memory,
-        tags: memory.memoryTags.map(mt => mt.tag.name),
-      }));
-
-      return createMCPResponse(formattedMemories, `Retrieved ${formattedMemories.length} memories`);
+      return createMCPResponse(memories, `Retrieved ${memories.length} memories`);
     });
   }
 

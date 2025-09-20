@@ -1,18 +1,23 @@
-# Use Node.js 20 LTS as base image
-FROM node:20-alpine
+# Use Node.js 20 LTS as base image (Debian-based for better compatibility with native modules)
+FROM node:20-slim
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies for Prisma and PostgreSQL
-RUN apk add --no-cache openssl
+# Install system dependencies for Prisma, PostgreSQL, and native modules
+RUN apt-get update && apt-get install -y \
+    openssl \
+    python3 \
+    make \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy package files
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Install dependencies
-RUN npm ci --only=production
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci
 
 # Copy source code
 COPY src ./src/
@@ -22,8 +27,8 @@ COPY tsconfig.json ./
 RUN npm run build
 
 # Create non-root user for security
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S mcp -u 1001
+RUN groupadd -g 1001 nodejs
+RUN useradd -r -u 1001 -g nodejs mcp
 
 # Change ownership of the app directory
 RUN chown -R mcp:nodejs /app

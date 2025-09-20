@@ -130,14 +130,18 @@ class AIMemoryHTTPServer {
     // MCP protocol endpoints
     this.app.post('/mcp/tools/list', async (req, res) => {
       try {
-        const result = await this.mcpServer.request(
-          {
-            method: 'tools/list',
-            params: {},
-          },
-          ListToolsRequestSchema
-        );
-        res.json(result);
+        // Get all available tools from imported tool arrays
+        const tools = [
+          ...memoryTools,
+          ...taskTools,
+          ...projectTools,
+          ...categoryTools,
+          ...contextTools,
+          ...aiInstructionTools,
+          ...statusTagTools,
+        ];
+
+        res.json({ tools });
       } catch (error) {
         console.error('[Server] Error listing tools:', error);
         res.status(500).json({ error: 'Failed to list tools' });

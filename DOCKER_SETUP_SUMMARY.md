@@ -86,8 +86,11 @@ Your AI Memory MCP server was experiencing availability issues when running as a
 ### Option 1: Automated Setup
 
 ```bash
-# Run the quick start script
+# Bash shell
 ./docker-start.sh
+
+# Fish shell
+./docker-start.fish
 ```
 
 ### Option 2: Manual Setup

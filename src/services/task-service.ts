@@ -253,7 +253,7 @@ export class TaskServiceImpl implements TaskService {
       // Add AI instructions if requested
       if (include_instructions) {
         const tasksWithInstructions = await Promise.all(
-          formattedTasks.map(async (task) => {
+          formattedTasks.map(async task => {
             const instructions = await this.getApplicableInstructionsForTask(task);
             return {
               ...task,
@@ -399,7 +399,10 @@ export class TaskServiceImpl implements TaskService {
         ai_instructions: instructions,
       };
 
-      return createMCPResponse(response, `Task "${task.title}" retrieved successfully with ${instructions.length} applicable AI instructions`);
+      return createMCPResponse(
+        response,
+        `Task "${task.title}" retrieved successfully with ${instructions.length} applicable AI instructions`
+      );
     });
   }
 
@@ -967,7 +970,7 @@ export class TaskServiceImpl implements TaskService {
    * Get applicable AI instructions for a task with caching
    */
   private async getApplicableInstructionsForTask(task: any): Promise<AIInstruction[]> {
-    const contexts = [{ scope: 'global' }];
+    const contexts: Array<{ scope: string; targetName?: string }> = [{ scope: 'global' }];
 
     // Add project context if task has a project
     if (task.project) {

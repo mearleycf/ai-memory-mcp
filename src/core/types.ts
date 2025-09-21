@@ -1,6 +1,6 @@
 /**
  * Core TypeScript interfaces and types for AI Memory MCP Server
- * 
+ *
  * This file contains all shared interfaces, types, and constants used across
  * the application to ensure type safety and consistency.
  */
@@ -21,7 +21,7 @@ export interface Memory {
   priority: number;
   created_at: string;
   updated_at: string;
-  embedding?: string;  // JSON string of number[]
+  embedding?: string; // JSON string of number[]
   embedding_model?: string;
   embedding_created_at?: string;
   // Joined data
@@ -43,7 +43,7 @@ export interface Task {
   updated_at: string;
   completed_at?: string;
   archived: boolean;
-  embedding?: string;  // JSON string of number[]
+  embedding?: string; // JSON string of number[]
   embedding_model?: string;
   embedding_created_at?: string;
   // Joined data
@@ -160,6 +160,11 @@ export interface DeleteAIInstructionArgs {
   id: number;
 }
 
+export interface BatchCreateAIInstructionArgs {
+  instructions: CreateAIInstructionArgs[];
+  continue_on_error?: boolean;
+}
+
 // Memory service argument interfaces
 export interface CreateMemoryArgs {
   title: string;
@@ -237,6 +242,7 @@ export interface ListTasksArgs {
   sort_by?: string;
   sort_order?: string;
   limit?: number;
+  include_instructions?: boolean;
 }
 
 export interface SearchTasksArgs {
@@ -323,37 +329,25 @@ export interface SemanticSearchResult {
 // Constants
 export const VALID_TASK_STATUSES = [
   'not_started',
-  'in_progress', 
+  'in_progress',
   'completed',
   'cancelled',
-  'on_hold'
+  'on_hold',
 ] as const;
 
-export type TaskStatus = typeof VALID_TASK_STATUSES[number];
+export type TaskStatus = (typeof VALID_TASK_STATUSES)[number];
 
-export const VALID_AI_INSTRUCTION_SCOPES = [
-  'global',
-  'project',
-  'category'
-] as const;
+export const VALID_AI_INSTRUCTION_SCOPES = ['global', 'project', 'category'] as const;
 
-export type AIInstructionScope = typeof VALID_AI_INSTRUCTION_SCOPES[number];
+export type AIInstructionScope = (typeof VALID_AI_INSTRUCTION_SCOPES)[number];
 
-export const VALID_CONTEXT_LEVELS = [
-  'basic',
-  'standard', 
-  'comprehensive'
-] as const;
+export const VALID_CONTEXT_LEVELS = ['basic', 'standard', 'comprehensive'] as const;
 
-export type ContextLevel = typeof VALID_CONTEXT_LEVELS[number];
+export type ContextLevel = (typeof VALID_CONTEXT_LEVELS)[number];
 
-export const VALID_TIME_HORIZONS = [
-  'today',
-  'week',
-  'month'
-] as const;
+export const VALID_TIME_HORIZONS = ['today', 'week', 'month'] as const;
 
-export type TimeHorizon = typeof VALID_TIME_HORIZONS[number];
+export type TimeHorizon = (typeof VALID_TIME_HORIZONS)[number];
 
 // Status emoji mapping
 export const STATUS_EMOJIS: Record<string, string> = {
@@ -361,5 +355,5 @@ export const STATUS_EMOJIS: Record<string, string> = {
   in_progress: '🔄',
   completed: '✅',
   cancelled: '❌',
-  on_hold: '⏸️'
+  on_hold: '⏸️',
 };

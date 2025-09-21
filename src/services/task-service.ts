@@ -10,8 +10,10 @@
 
 import { PrismaDatabaseService } from '../core/prisma-database.js';
 import { embeddingService } from '../embedding-service.js';
+import { InstructionCacheService } from './instruction-cache-service.js';
 import {
   Task,
+  AIInstruction,
   CreateTaskArgs,
   ListTasksArgs,
   SearchTasksArgs,
@@ -55,7 +57,11 @@ export interface TaskService {
  * status workflow management, and priority/deadline handling.
  */
 export class TaskServiceImpl implements TaskService {
-  constructor(private db: PrismaDatabaseService) {}
+  private instructionCache: InstructionCacheService;
+
+  constructor(private db: PrismaDatabaseService) {
+    this.instructionCache = new InstructionCacheService();
+  }
 
   /**
    * Create a new task with optional embedding generation
@@ -165,6 +171,7 @@ export class TaskServiceImpl implements TaskService {
         sort_by = 'updated_at',
         sort_order = 'DESC',
         limit = 50,
+        include_instructions = true,
       } = args;
 
       // Validate sort parameters
@@ -242,6 +249,24 @@ export class TaskServiceImpl implements TaskService {
         is_overdue:
           task.dueDate && new Date(task.dueDate) < new Date() && task.status.name !== 'completed',
       }));
+
+      // Add AI instructions if requested
+      if (include_instructions) {
+        const tasksWithInstructions = await Promise.all(
+          formattedTasks.map(async (task) => {
+            const instructions = await this.getApplicableInstructionsForTask(task);
+            return {
+              ...task,
+              ai_instructions: instructions,
+            };
+          })
+        );
+
+        return createMCPResponse(
+          tasksWithInstructions,
+          `Retrieved ${formattedTasks.length} tasks with applicable AI instructions`
+        );
+      }
 
       return createMCPResponse(formattedTasks, `Retrieved ${formattedTasks.length} tasks`);
     });
@@ -349,7 +374,7 @@ export class TaskServiceImpl implements TaskService {
   }
 
   /**
-   * Get a specific task by ID with all relations
+   * Get a specific task by ID with all relations and applicable AI instructions
    */
   async getTask(args: GetTaskArgs): Promise<MCPResponse> {
     return handleAsyncError(async () => {
@@ -365,7 +390,16 @@ export class TaskServiceImpl implements TaskService {
         throw createNotFoundError(`Task with ID ${id} not found`);
       }
 
-      return createMCPResponse(task, `Task "${task.title}" retrieved successfully`);
+      // Get applicable AI instructions for this task
+      const instructions = await this.getApplicableInstructionsForTask(task);
+
+      // Add instructions to the response
+      const response = {
+        ...task,
+        ai_instructions: instructions,
+      };
+
+      return createMCPResponse(response, `Task "${task.title}" retrieved successfully with ${instructions.length} applicable AI instructions`);
     });
   }
 
@@ -927,6 +961,83 @@ export class TaskServiceImpl implements TaskService {
     }
 
     return tagIds;
+  }
+
+  /**
+   * Get applicable AI instructions for a task with caching
+   */
+  private async getApplicableInstructionsForTask(task: any): Promise<AIInstruction[]> {
+    const contexts = [{ scope: 'global' }];
+
+    // Add project context if task has a project
+    if (task.project) {
+      const projectName = typeof task.project === 'string' ? task.project : task.project.name;
+      if (projectName) {
+        contexts.push({ scope: 'project', targetName: projectName });
+      }
+    }
+
+    // Add category context if task has a category
+    if (task.category) {
+      const categoryName = typeof task.category === 'string' ? task.category : task.category.name;
+      if (categoryName) {
+        contexts.push({ scope: 'category', targetName: categoryName });
+      }
+    }
+
+    // Generate cache key for this combination of contexts
+    const cacheKey = InstructionCacheService.generateMultiContextCacheKey(contexts);
+
+    // Try to get from cache first
+    const cachedInstructions = this.instructionCache.get(cacheKey);
+    if (cachedInstructions) {
+      return cachedInstructions;
+    }
+
+    // Build where conditions for applicable instructions
+    const whereConditions: any[] = [];
+
+    for (const context of contexts) {
+      if (context.scope === 'global') {
+        whereConditions.push({ scope: 'global' });
+      } else if (context.scope === 'project' && context.targetName) {
+        const project = await this.db.client.project.findFirst({
+          where: { name: context.targetName.toLowerCase() },
+        });
+        if (project) {
+          whereConditions.push({
+            scope: 'project',
+            targetId: project.id,
+          });
+        }
+      } else if (context.scope === 'category' && context.targetName) {
+        const category = await this.db.client.category.findFirst({
+          where: { name: context.targetName.toLowerCase() },
+        });
+        if (category) {
+          whereConditions.push({
+            scope: 'category',
+            targetId: category.id,
+          });
+        }
+      }
+    }
+
+    if (whereConditions.length === 0) {
+      return [];
+    }
+
+    const instructions = await this.db.client.aIInstruction.findMany({
+      where: {
+        OR: whereConditions,
+      },
+      orderBy: [{ priority: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    // Cache the results
+    this.instructionCache.set(cacheKey, instructions as any);
+
+    return instructions as any;
   }
 
   /**

@@ -258,6 +258,9 @@ class AIMemoryServer {
           case 'delete_ai_instruction':
             result = await this.aiInstructionHandlers.delete_ai_instruction(args);
             break;
+          case 'batch_create_ai_instructions':
+            result = await this.aiInstructionHandlers.batch_create_ai_instructions(args);
+            break;
 
           default:
             return {

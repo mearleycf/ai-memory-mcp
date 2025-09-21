@@ -118,6 +118,34 @@ npx prisma db push --force-reset
 
 ## Installation
 
+### Option 1: Docker Setup (Recommended)
+
+The easiest way to get started is using Docker, which automatically sets up PostgreSQL and the server:
+
+1. Navigate to the server directory:
+
+```bash
+cd /path/to/ai-memory-mcp
+```
+
+2. Start with Docker (automatically creates .env and sets up database):
+
+```bash
+# Quick start with Docker
+npm run docker:up
+
+# Or use the convenience script
+./scripts/docker-start.sh    # For bash/zsh
+./scripts/docker-start.fish  # For fish shell
+```
+
+3. The server will be available at:
+   - **Health check**: http://localhost:3001/health
+   - **API info**: http://localhost:3001/api/info
+   - **MCP tools**: http://localhost:3001/mcp/tools/list
+
+### Option 2: Local Development Setup
+
 1. Navigate to the server directory:
 
 ```bash
@@ -388,6 +416,99 @@ npm run docker:build  # Build Docker image
 npm run docker:up     # Start with Docker Compose
 npm run docker:down   # Stop Docker containers
 npm run docker:logs   # View Docker logs
+npm run docker:restart # Restart the server container
+```
+
+## Docker Setup
+
+### Quick Start
+
+The fastest way to get the server running is with Docker:
+
+```bash
+# Start everything (PostgreSQL + Server)
+npm run docker:up
+
+# Or use the convenience script
+./scripts/docker-start.sh    # For bash/zsh
+./scripts/docker-start.fish  # For fish shell
+```
+
+### Docker Services
+
+The Docker setup includes:
+
+- **PostgreSQL Database**: Running on port 5433 (mapped from container port 5432)
+- **AI Memory Server**: Running on port 3001 (mapped from container port 3000)
+- **Automatic Health Checks**: Both services include health monitoring
+- **Persistent Data**: Database data persists between container restarts
+
+### Docker Commands
+
+```bash
+# Start all services
+npm run docker:up
+# or
+docker-compose -f docker/docker-compose.yml up -d
+
+# Stop all services
+npm run docker:down
+# or
+docker-compose -f docker/docker-compose.yml down
+
+# View logs
+npm run docker:logs
+# or
+docker-compose -f docker/docker-compose.yml logs -f
+
+# Restart just the server
+npm run docker:restart
+# or
+docker-compose -f docker/docker-compose.yml restart ai-memory-server
+
+# Build the Docker image
+npm run docker:build
+# or
+docker-compose -f docker/docker-compose.yml build
+```
+
+### Docker Configuration
+
+The Docker setup uses these default settings:
+
+- **Database**: PostgreSQL 15 Alpine
+- **Database Name**: `ai_memory`
+- **Database User**: `ai_memory_user`
+- **Database Password**: `ai_memory_password`
+- **Server Port**: 3001 (external) → 3000 (container)
+- **Database Port**: 5433 (external) → 5432 (container)
+
+### Docker Environment
+
+When using Docker, the server automatically uses these environment variables:
+
+```bash
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+NODE_ENV=production
+PORT=3000
+```
+
+### Docker Troubleshooting
+
+```bash
+# Check service status
+docker-compose -f docker/docker-compose.yml ps
+
+# View detailed logs
+docker-compose -f docker/docker-compose.yml logs ai-memory-server
+docker-compose -f docker/docker-compose.yml logs postgres
+
+# Access the database directly
+docker exec -it ai-memory-postgres psql -U ai_memory_user -d ai_memory
+
+# Reset everything (WARNING: deletes all data)
+docker-compose -f docker/docker-compose.yml down -v
+npm run docker:up
 ```
 
 ### Project Structure
@@ -483,6 +604,16 @@ MIT License - feel free to modify and distribute as needed.
 ---
 
 ## Quick Start
+
+### Docker (Recommended - 2 minutes)
+
+1. **Clone & Navigate**: `cd /path/to/ai-memory-mcp`
+2. **Start Everything**: `npm run docker:up`
+3. **Configure**: Add to Claude Desktop config (see Configuration section)
+4. **Test**: Create a memory with category and project
+5. **Explore**: Use `list_projects` and `list_categories` to see your data organization
+
+### Local Development (5 minutes)
 
 1. **Install**: `npm install`
 2. **Setup Database**: Copy `env.example` to `.env` and configure DATABASE_URL

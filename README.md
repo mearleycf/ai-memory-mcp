@@ -199,7 +199,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "node",
       "args": ["/path/to/ai-memory-mcp/dist/index.js"],
       "env": {
-        "DATABASE_URL": "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
+        "DATABASE_URL": "postgresql://ai_memory_user:ai_memory_password@localhost:5432/ai_memory"
       }
     }
   }
@@ -217,7 +217,7 @@ Edit `%APPDATA%/Claude/claude_desktop_config.json`:
       "command": "node",
       "args": ["C:\\path\\to\\ai-memory-mcp\\dist\\index.js"],
       "env": {
-        "DATABASE_URL": "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
+        "DATABASE_URL": "postgresql://ai_memory_user:ai_memory_password@localhost:5432/ai_memory"
       }
     }
   }
@@ -488,7 +488,7 @@ The Docker setup uses these default settings:
 When using Docker, the server automatically uses these environment variables:
 
 ```bash
-DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+DATABASE_URL=postgresql://ai_memory_user:ai_memory_password@postgres:5432/ai_memory
 NODE_ENV=production
 PORT=3000
 ```

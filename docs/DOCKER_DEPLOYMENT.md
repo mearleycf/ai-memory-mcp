@@ -37,7 +37,7 @@ cp env.example .env
 Edit `.env` to match your setup:
 
 ```bash
-DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+DATABASE_URL="postgresql://ai_memory_user:ai_memory_password@postgres:5432/ai_memory"
 NODE_ENV=production
 PORT=3000
 ```

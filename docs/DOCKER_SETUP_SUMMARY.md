@@ -2,7 +2,7 @@
 
 ## 🎯 Problem Solved
 
-Your AI Memory MCP server was experiencing availability issues when running as a stdio-based server that starts and stops with each request. This Docker setup provides a **persistent, always-running server** that eliminates connection instability and improves performance.
+Your AI Memory MCP server was experiencing database connection issues when running directly from the host. The PostgreSQL database was running in a Docker container, but the MCP server couldn't connect to it due to network isolation. This Docker setup provides a **containerized solution** where both the server and database run in the same Docker network, ensuring reliable connectivity.
 
 ## 🚀 What's Been Created
 
@@ -28,24 +28,25 @@ Your AI Memory MCP server was experiencing availability issues when running as a
 
 ```
 ┌─────────────────┐    ┌─────────────────┐
-│   MCP Client    │    │   HTTP Client   │
-│   (Cursor)      │    │   (curl, etc.)  │
+│   MCP Client    │    │   MCP Client    │
+│   (Cursor)      │    │   (mcp-cli)     │
 └─────────┬───────┘    └─────────┬───────┘
           │                      │
-          │ HTTP/HTTPS           │ HTTP/HTTPS
-          │ Port 3000            │ Port 3000
+          │ docker exec          │ docker exec
+          │ stdio                │ stdio
           ▼                      ▼
 ┌─────────────────────────────────────────┐
 │         AI Memory MCP Server            │
 │         (Docker Container)              │
 │  ┌─────────────────────────────────────┐│
-│  │  Express.js HTTP Server             ││
-│  │  - MCP Protocol Endpoints           ││
-│  │  - REST API Endpoints               ││
-│  │  - Health Checks                    ││
+│  │  Node.js Stdio Server               ││
+│  │  - MCP Protocol over stdio          ││
+│  │  - Memory Management Tools          ││
+│  │  - Task Management Tools            ││
 │  └─────────────────────────────────────┘│
 └─────────┬───────────────────────────────┘
           │ PostgreSQL Connection
+          │ (Same Docker Network)
           ▼
 ┌─────────────────────────────────────────┐
 │         PostgreSQL Database             │
@@ -53,19 +54,19 @@ Your AI Memory MCP server was experiencing availability issues when running as a
 │  ┌─────────────────────────────────────┐│
 │  │  - Persistent Data Storage          ││
 │  │  - Prisma ORM Integration           ││
-│  │  - Automatic Migrations             ││
+│  │  - Applied Migrations               ││
 │  └─────────────────────────────────────┘│
 └─────────────────────────────────────────┘
 ```
 
 ## 🔧 Key Features
 
-### Persistent Server
+### Containerized Solution
 
-- **Always Running**: Server stays up between requests
-- **Fast Response**: No startup time for each request
-- **Stable Connections**: Database connections are maintained
-- **Health Monitoring**: Built-in health checks and logging
+- **Network Isolation**: Both server and database run in the same Docker network
+- **Reliable Connectivity**: No more database connection issues
+- **Easy Management**: Single `docker-compose` command to start everything
+- **Persistent Data**: Database data survives container restarts
 
 ### Security
 
@@ -96,91 +97,112 @@ Your AI Memory MCP server was experiencing availability issues when running as a
 ### Option 2: Manual Setup
 
 ```bash
-# 1. Create environment file
-cp env.example .env
+# 1. Start services
+docker-compose -f docker/docker-compose.yml up -d
 
-# 2. Start services
-docker-compose up -d
+# 2. Check status
+docker-compose -f docker/docker-compose.yml ps
 
-# 3. Check status
-docker-compose ps
+# 3. Verify both containers are running
+docker ps | grep ai-memory
 ```
 
-## 📡 API Endpoints
+## 📡 MCP Tools Available
 
-### Health & Info
+The server provides 46 MCP tools including:
 
-- `GET /health` - Health check
-- `GET /api/info` - Server information
+### Memory Management
 
-### MCP Protocol (HTTP)
+- `store_memory` - Store a new memory with optional category, project, tags, and priority
+- `search_memories` - Search memories using semantic search with optional filters
+- `list_memories` - List memories with filtering and sorting options
+- `get_memory` - Get a specific memory by ID with all relations
+- `update_memory` - Update an existing memory
+- `delete_memory` - Delete a memory by ID
 
-- `POST /mcp/tools/list` - List available MCP tools
-- `POST /mcp/tools/call` - Call an MCP tool
+### Task Management
 
-### Direct REST API
+- `create_task` - Create a new task with optional category, project, tags, priority, and due date
+- `list_tasks` - List tasks with filtering and sorting options
+- `search_tasks` - Search tasks using semantic search with optional filters
+- `get_task` - Get a specific task by ID with all relations
+- `update_task` - Update an existing task
+- `complete_task` - Mark a task as completed
+- `archive_task` - Archive or unarchive a task
+- `delete_task` - Delete a task by ID
 
-- `POST /api/memory/store` - Store a memory
-- `POST /api/memory/search` - Search memories
-- `GET /api/memory/list` - List memories
-- `POST /api/task/create` - Create a task
-- `GET /api/task/list` - List tasks
+### Project & Category Management
 
-## 🔄 Migration from Stdio to HTTP
+- `create_project` - Create a new project with optional description and color
+- `list_projects` - List all projects with optional statistics
+- `create_category` - Create a new category with optional description
+- `list_categories` - List all categories with usage statistics
 
-### Update MCP Client Configuration
+### Context & AI Instructions
 
-**Before (stdio):**
+- `get_project_context` - Get comprehensive context for a specific project
+- `get_task_context` - Get comprehensive context for a task
+- `get_memory_context` - Get comprehensive context for a memory
+- `create_ai_instruction` - Create a new AI instruction with scope-based targeting
+
+## 🔄 MCP Client Configuration
+
+### Working Configuration
+
+**For Cursor (`~/.cursor/mcp.json`):**
 
 ```json
 {
   "mcpServers": {
     "ai-memory": {
-      "command": "node",
-      "args": ["dist/index.js"],
-      "cwd": "/path/to/ai-memory-mcp"
+      "command": "docker",
+      "args": ["exec", "-i", "ai-memory-server", "node", "dist/index.js"]
     }
   }
 }
 ```
 
-**After (HTTP):**
+**For mcp-cli (`server_config.json`):**
 
 ```json
 {
   "mcpServers": {
-    "ai-memory-http": {
-      "url": "http://localhost:3000/mcp"
+    "ai-memory": {
+      "command": "docker",
+      "args": ["exec", "-i", "ai-memory-server", "node", "dist/index.js"]
     }
   }
 }
 ```
+
+### Prerequisites
+
+- Docker containers must be running: `docker-compose -f docker/docker-compose.yml up -d`
+- Both `ai-memory-postgres` and `ai-memory-server` containers should be healthy
 
 ## 🛠️ Management Commands
 
 ```bash
 # Start services
-npm run docker:up
-# or
-docker-compose up -d
+docker-compose -f docker/docker-compose.yml up -d
 
 # Stop services
-npm run docker:down
-# or
-docker-compose down
+docker-compose -f docker/docker-compose.yml down
 
 # View logs
-npm run docker:logs
-# or
-docker-compose logs -f
+docker-compose -f docker/docker-compose.yml logs -f
 
 # Restart server only
-npm run docker:restart
-# or
-docker-compose restart ai-memory-server
+docker-compose -f docker/docker-compose.yml restart ai-memory-server
 
 # Rebuild and restart
-docker-compose up -d --build
+docker-compose -f docker/docker-compose.yml up -d --build
+
+# Check container status
+docker ps | grep ai-memory
+
+# Test MCP server connection
+cd /path/to/mcp-cli && python -m mcp_cli --config-file server_config.json --server ai-memory ping
 ```
 
 ## 🔍 Monitoring & Troubleshooting
@@ -188,37 +210,37 @@ docker-compose up -d --build
 ### Health Checks
 
 ```bash
-# Check server health
-curl http://localhost:3000/health
+# Check container status
+docker ps | grep ai-memory
 
-# Get server info
-curl http://localhost:3000/api/info
+# Test MCP server connection
+cd /path/to/mcp-cli && python -m mcp_cli --config-file server_config.json --server ai-memory ping
 
 # List available tools
-curl -X POST http://localhost:3000/mcp/tools/list
+cd /path/to/mcp-cli && python -m mcp_cli --config-file server_config.json --server ai-memory tools
 ```
 
 ### Logs
 
 ```bash
 # All services
-docker-compose logs -f
+docker-compose -f docker/docker-compose.yml logs -f
 
 # Server only
-docker-compose logs -f ai-memory-server
+docker-compose -f docker/docker-compose.yml logs -f ai-memory-server
 
 # Database only
-docker-compose logs -f postgres
+docker-compose -f docker/docker-compose.yml logs -f ai-memory-postgres
 ```
 
 ### Database Access
 
 ```bash
 # Access PostgreSQL shell
-docker-compose exec postgres psql -U ai_memory_user -d ai_memory
+docker exec -it ai-memory-postgres psql -U ai_memory_user -d ai_memory
 
-# Run Prisma migrations
-docker-compose exec ai-memory-server npx prisma migrate deploy
+# Run Prisma migrations (if needed)
+docker run --rm --network docker_ai-memory-network -v $(pwd):/app -w /app -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@ai-memory-postgres:5432/${POSTGRES_DB}" node:20-slim npx prisma migrate deploy
 ```
 
 ## 🔒 Security Considerations
@@ -240,23 +262,23 @@ SSL_KEY_PATH=/path/to/private-key.pem
 SSL_CERT_PATH=/path/to/certificate.pem
 ```
 
-## 📊 Benefits Over Stdio Server
+## 📊 Benefits Over Host-Based Setup
 
-| Aspect           | Stdio Server             | Docker HTTP Server      |
-| ---------------- | ------------------------ | ----------------------- |
-| **Availability** | Starts/stops per request | Always running          |
-| **Performance**  | Slow startup time        | Fast response           |
-| **Stability**    | Connection issues        | Stable connections      |
-| **Monitoring**   | Limited visibility       | Health checks, logs     |
-| **Scaling**      | Single process           | Container orchestration |
-| **Deployment**   | Local only               | Cloud-ready             |
+| Aspect           | Host-Based Server          | Docker Containerized           |
+| ---------------- | -------------------------- | ------------------------------ |
+| **Connectivity** | Database connection issues | Reliable network communication |
+| **Isolation**    | Shared host environment    | Isolated container environment |
+| **Consistency**  | Environment differences    | Consistent deployment          |
+| **Management**   | Manual process management  | Container orchestration        |
+| **Dependencies** | Host system dependencies   | Self-contained                 |
+| **Portability**  | Platform-specific          | Cross-platform                 |
 
 ## 🎉 Next Steps
 
-1. **Test the setup**: Run `./docker-start.sh` and verify it works
-2. **Update your MCP client**: Change configuration to use HTTP endpoint
-3. **Customize configuration**: Edit `.env` for your needs
-4. **Deploy to production**: Follow security guidelines in `DOCKER_DEPLOYMENT.md`
+1. **Start the containers**: Run `docker-compose -f docker/docker-compose.yml up -d`
+2. **Update your MCP client**: Use the Docker-based configuration shown above
+3. **Test the connection**: Use `mcp-cli` to ping the server and list tools
+4. **Start using the tools**: Begin storing memories and managing tasks through your MCP client
 
 ## 📚 Additional Resources
 
@@ -265,4 +287,4 @@ SSL_CERT_PATH=/path/to/certificate.pem
 - **Environment Template**: `env.example`
 - **Docker Compose**: `docker-compose.yml`
 
-Your AI Memory MCP server is now ready for persistent, reliable operation! 🚀
+Your AI Memory MCP server is now ready for reliable, containerized operation! 🚀

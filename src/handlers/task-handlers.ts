@@ -133,6 +133,11 @@ export const taskTools: Tool[] = [
           maximum: 200,
           default: 50,
         },
+        include_instructions: {
+          type: 'boolean',
+          description: 'Include applicable AI instructions with each task (default: true)',
+          default: true,
+        },
       },
     },
   },

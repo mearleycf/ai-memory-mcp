@@ -3,9 +3,9 @@ services:
     image: postgres:15-alpine
     container_name: ai-memory-postgres
     environment:
-      POSTGRES_DB: ai_memory
-      POSTGRES_USER: ai_memory_user
-      POSTGRES_PASSWORD: ai_memory_password
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
@@ -25,7 +25,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: ai-memory-server
     environment:
-      DATABASE_URL: postgresql://ai_memory_user:ai_memory_password@postgres:5432/ai_memory
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       NODE_ENV: production
       PORT: 3000
     ports:

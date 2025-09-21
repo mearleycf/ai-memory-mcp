@@ -12,6 +12,7 @@ import { PrismaDatabaseService } from '../core/prisma-database.js';
 import {
   AIInstruction,
   CreateAIInstructionArgs,
+  BatchCreateAIInstructionArgs,
   ListAIInstructionsArgs,
   GetAIInstructionsArgs,
   UpdateAIInstructionArgs,
@@ -31,6 +32,7 @@ import {
  */
 export interface AIInstructionService {
   createAIInstruction(args: CreateAIInstructionArgs): Promise<MCPResponse>;
+  batchCreateAIInstructions(args: BatchCreateAIInstructionArgs): Promise<MCPResponse>;
   listAIInstructions(args: ListAIInstructionsArgs): Promise<MCPResponse>;
   getAIInstructions(args: GetAIInstructionsArgs): Promise<MCPResponse>;
   updateAIInstruction(args: UpdateAIInstructionArgs): Promise<MCPResponse>;
@@ -114,6 +116,136 @@ export class AIInstructionServiceImpl implements AIInstructionService {
           {
             type: 'text',
             text: `AI instruction created successfully with ID: ${instruction.id}`,
+          },
+        ],
+      };
+    });
+  }
+
+  /**
+   * Create multiple AI instructions in a batch operation
+   *
+   * @param args - Batch creation arguments including array of instructions and error handling options
+   * @returns Promise resolving to MCP response with batch creation results
+   */
+  async batchCreateAIInstructions(args: BatchCreateAIInstructionArgs): Promise<MCPResponse> {
+    return handleAsyncError(async () => {
+      const { instructions, continue_on_error = false } = args;
+
+      // Validate input
+      if (!Array.isArray(instructions) || instructions.length === 0) {
+        throw createValidationError('Instructions array is required and must not be empty');
+      }
+
+      if (instructions.length > 100) {
+        throw createValidationError('Cannot create more than 100 instructions in a single batch');
+      }
+
+      const results = {
+        successful: [] as number[],
+        failed: [] as { index: number; error: string }[],
+        total: instructions.length,
+      };
+
+      // Process each instruction
+      for (let i = 0; i < instructions.length; i++) {
+        const instruction = instructions[i];
+
+        try {
+          // Validate individual instruction
+          if (!instruction.title?.trim()) {
+            throw createValidationError('Title is required');
+          }
+          if (!instruction.content?.trim()) {
+            throw createValidationError('Content is required');
+          }
+          if (
+            !instruction.scope ||
+            !['global', 'project', 'category'].includes(instruction.scope)
+          ) {
+            throw createValidationError('Valid scope (global, project, category) is required');
+          }
+
+          // Validate scope-specific requirements
+          if (
+            (instruction.scope === 'project' || instruction.scope === 'category') &&
+            !instruction.target_name?.trim()
+          ) {
+            throw createValidationError(`Target name is required for ${instruction.scope} scope`);
+          }
+
+          // Validate priority
+          const priority = instruction.priority || 1;
+          if (priority < 1 || priority > 5) {
+            throw createValidationError('Priority must be between 1 and 5');
+          }
+
+          let target_id: number | null = null;
+
+          // Resolve target ID for project/category scopes
+          if (instruction.scope === 'project' && instruction.target_name) {
+            const project = await this.db.client.project.findUnique({
+              where: { name: instruction.target_name.toLowerCase() },
+            });
+            if (!project) {
+              throw createNotFoundError(`Project '${instruction.target_name}' not found`);
+            }
+            target_id = project.id;
+          } else if (instruction.scope === 'category' && instruction.target_name) {
+            const category = await this.db.client.category.findUnique({
+              where: { name: instruction.target_name.toLowerCase() },
+            });
+            if (!category) {
+              throw createNotFoundError(`Category '${instruction.target_name}' not found`);
+            }
+            target_id = category.id;
+          }
+
+          // Create the AI instruction
+          const createdInstruction = await this.db.client.aIInstruction.create({
+            data: {
+              title: instruction.title.trim(),
+              content: instruction.content.trim(),
+              scope: instruction.scope,
+              targetId: target_id,
+              priority,
+            },
+          });
+
+          results.successful.push(createdInstruction.id);
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          results.failed.push({ index: i, error: errorMessage });
+
+          if (!continue_on_error) {
+            // If not continuing on error, throw the error to stop the batch
+            throw error;
+          }
+        }
+      }
+
+      // Format response
+      let responseText = `Batch AI instruction creation completed:\n`;
+      responseText += `✅ Successfully created: ${results.successful.length} instructions\n`;
+      responseText += `❌ Failed: ${results.failed.length} instructions\n`;
+      responseText += `📊 Total processed: ${results.total} instructions\n\n`;
+
+      if (results.successful.length > 0) {
+        responseText += `**Created instruction IDs:** ${results.successful.join(', ')}\n\n`;
+      }
+
+      if (results.failed.length > 0) {
+        responseText += `**Failed instructions:**\n`;
+        for (const failure of results.failed) {
+          responseText += `- Index ${failure.index}: ${failure.error}\n`;
+        }
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: responseText,
           },
         ],
       };

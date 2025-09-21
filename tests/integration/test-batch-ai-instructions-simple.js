@@ -32,7 +32,7 @@ class SimpleBatchAIInstructionTester {
     console.log('🧹 Cleaning up test environment...');
 
     if (this.db) {
-      await this.db.disconnect();
+      await this.db.close();
     }
 
     console.log('✅ Cleanup complete');

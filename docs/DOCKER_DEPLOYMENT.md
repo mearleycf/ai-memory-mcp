@@ -37,7 +37,7 @@ cp env.example .env
 Edit `.env` to match your setup:
 
 ```bash
-DATABASE_URL="postgresql://ai_memory_user:ai_memory_password@postgres:5432/ai_memory"
+DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
 NODE_ENV=production
 PORT=3000
 ```
@@ -91,8 +91,8 @@ curl http://localhost:3000/api/info
 - **Image**: `postgres:15-alpine`
 - **Port**: `5432`
 - **Database**: `ai_memory`
-- **User**: `ai_memory_user`
-- **Password**: `ai_memory_password`
+- **User**: `${POSTGRES_USER}`
+- **Password**: `${POSTGRES_PASSWORD}`
 - **Volume**: Persistent data storage
 
 #### AI Memory Server
@@ -194,7 +194,7 @@ docker-compose up -d --build
 
 ```bash
 # Access PostgreSQL shell
-docker-compose exec postgres psql -U ai_memory_user -d ai_memory
+docker-compose exec postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
 
 # Run Prisma migrations
 docker-compose exec ai-memory-server npx prisma migrate deploy
@@ -285,10 +285,10 @@ For production scaling:
 
 ```bash
 # Backup database
-docker-compose exec postgres pg_dump -U ai_memory_user ai_memory > backup.sql
+docker-compose exec postgres pg_dump -U ${POSTGRES_USER} ${POSTGRES_DB} > backup.sql
 
 # Restore database
-docker-compose exec -T postgres psql -U ai_memory_user ai_memory < backup.sql
+docker-compose exec -T postgres psql -U ${POSTGRES_USER} ${POSTGRES_DB} < backup.sql
 ```
 
 ## Migration from Stdio to HTTP

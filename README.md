@@ -199,7 +199,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "node",
       "args": ["/path/to/ai-memory-mcp/dist/index.js"],
       "env": {
-        "DATABASE_URL": "postgresql://ai_memory_user:ai_memory_password@localhost:5432/ai_memory"
+        "DATABASE_URL": "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
       }
     }
   }
@@ -217,7 +217,7 @@ Edit `%APPDATA%/Claude/claude_desktop_config.json`:
       "command": "node",
       "args": ["C:\\path\\to\\ai-memory-mcp\\dist\\index.js"],
       "env": {
-        "DATABASE_URL": "postgresql://ai_memory_user:ai_memory_password@localhost:5432/ai_memory"
+        "DATABASE_URL": "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
       }
     }
   }
@@ -478,8 +478,8 @@ The Docker setup uses these default settings:
 
 - **Database**: PostgreSQL 15 Alpine
 - **Database Name**: `ai_memory`
-- **Database User**: `ai_memory_user`
-- **Database Password**: `ai_memory_password`
+- **Database User**: `${POSTGRES_USER}`
+- **Database Password**: `${POSTGRES_PASSWORD}`
 - **Server Port**: 3001 (external) → 3000 (container)
 - **Database Port**: 5433 (external) → 5432 (container)
 
@@ -488,7 +488,7 @@ The Docker setup uses these default settings:
 When using Docker, the server automatically uses these environment variables:
 
 ```bash
-DATABASE_URL=postgresql://ai_memory_user:ai_memory_password@postgres:5432/ai_memory
+DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
 NODE_ENV=production
 PORT=3000
 ```
@@ -504,7 +504,7 @@ docker-compose -f docker/docker-compose.yml logs ai-memory-server
 docker-compose -f docker/docker-compose.yml logs postgres
 
 # Access the database directly
-docker exec -it ai-memory-postgres psql -U ai_memory_user -d ai_memory
+docker exec -it ai-memory-postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
 
 # Reset everything (WARNING: deletes all data)
 docker-compose -f docker/docker-compose.yml down -v

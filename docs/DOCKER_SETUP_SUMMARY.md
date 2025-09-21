@@ -237,10 +237,10 @@ docker-compose -f docker/docker-compose.yml logs -f ai-memory-postgres
 
 ```bash
 # Access PostgreSQL shell
-docker exec -it ai-memory-postgres psql -U ai_memory_user -d ai_memory
+docker exec -it ai-memory-postgres psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
 
 # Run Prisma migrations (if needed)
-docker run --rm --network docker_ai-memory-network -v $(pwd):/app -w /app -e DATABASE_URL="postgresql://ai_memory_user:ai_memory_password@ai-memory-postgres:5432/ai_memory" node:20-slim npx prisma migrate deploy
+docker run --rm --network docker_ai-memory-network -v $(pwd):/app -w /app -e DATABASE_URL="postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@ai-memory-postgres:5432/${POSTGRES_DB}" node:20-slim npx prisma migrate deploy
 ```
 
 ## 🔒 Security Considerations

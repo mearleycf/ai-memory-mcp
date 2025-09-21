@@ -16,8 +16,8 @@ LOCAL_USER="mikeearley"
 DOCKER_DB="ai_memory"
 DOCKER_HOST="localhost"
 DOCKER_PORT="5433"
-DOCKER_USER="ai_memory_user"
-DOCKER_PASSWORD="ai_memory_password"
+DOCKER_USER="${POSTGRES_USER}"
+DOCKER_PASSWORD="${POSTGRES_PASSWORD}"
 
 # Create temporary directory for export files
 TEMP_DIR="/tmp/ai-memory-migration-$(date +%s)"

@@ -1,34 +1,10 @@
-# AI Memory & Task Management MCP Server v2.0
+# AI Memory & Task Management MCP Server
 
 A comprehensive Model Context Protocol (MCP) server that provides persistent memory and task management capabilities for AI conversations with a **normalized relational database**. Store context, preferences, and information that persists across conversations, plus manage tasks and projects with sophisticated relationship tracking.
 
-## 🆕 Version 2.0 - Normalized Database Schema
+## 🆕 Current Version - Normalized Database Schema
 
-Version 2.0 introduces a completely rewritten **normalized relational database** with:
-
-## 🚀 **CRITICAL REFACTORING IN PROGRESS**
-
-**Status**: Phase 3 Complete (56% extracted) - Memory and Task Services successfully extracted!
-
-This codebase is undergoing a **critical refactoring** to transform a 3,566-line monolithic file into a professional, maintainable component architecture.
-
-### **Refactoring Progress**
-
-- ✅ **Phase 1**: Context Service extraction (24% complete)
-- ✅ **Phase 2**: AI Instructions Service extraction (8% complete)
-- ✅ **Phase 3**: Memory and Task Service extraction (24% complete)
-- 🚧 **Phase 4**: Project and Category Service extraction (pending)
-- ⏳ **Phase 5**: Final cleanup and validation (pending)
-
-### **Architecture Improvements**
-
-- **Service Layer**: Business logic extracted into dedicated services
-- **Handler Layer**: MCP tool handlers with proper validation
-- **Type Safety**: Comprehensive TypeScript interfaces
-- **Error Handling**: Professional error management
-- **Code Quality**: All files under 500 lines, ESLint/Prettier compliance
-
-**See `PHASE3_COMPLETION_SUMMARY.md` for detailed progress information.**
+This version features a **normalized relational database** with:
 
 - **Foreign key relationships** instead of text-based fields
 - **Many-to-many tag relationships** for flexible organization
@@ -36,7 +12,7 @@ This codebase is undergoing a **critical refactoring** to transform a 3,566-line
 - **Category management** with usage statistics
 - **Advanced relationship queries** with JOIN operations
 - **Data integrity** through foreign key constraints
-- **Comprehensive migration system** with backup and rollback
+- **Professional architecture** with service and handler layers
 
 ## Features
 
@@ -113,35 +89,39 @@ task_tags (task_id, tag_id, created_at)
 - **Analytics**: Rich relationship data for usage statistics
 - **Flexibility**: Easy to add new relationships without schema changes
 
-## Migration System
+## Database Setup
 
-### Automatic Migration (v1.0 → v2.0)
+### Prisma Database Management
 
-The server includes a comprehensive migration system:
+The server uses Prisma for database management:
 
 ```bash
-# Test migration on a copy first
-npm run test-migration
+# Generate Prisma client after schema changes
+npx prisma generate
 
-# Run production migration
-npm run migrate
+# Push schema changes to database
+npx prisma db push
+
+# View database in Prisma Studio
+npx prisma studio
+
+# Reset database (WARNING: deletes all data)
+npx prisma db push --force-reset
 ```
 
-### Migration Features
+### Database Features
 
-- **Automatic Backup**: Creates timestamped backup before migration
-- **Data Preservation**: Zero data loss during migration
-- **Rollback Capability**: Automatic rollback if migration fails
-- **Validation**: Comprehensive data validation before and after
-- **Project Extraction**: Smart extraction of project names from titles and existing data
-- **Tag Normalization**: Converts comma-separated tags to many-to-many relationships
+- **Automatic Schema Management**: Prisma handles schema migrations
+- **Type Safety**: Generated TypeScript types for all database operations
+- **Data Integrity**: Foreign key constraints ensure consistency
+- **Backup Strategy**: Regular database backups recommended
 
 ## Installation
 
 1. Navigate to the server directory:
 
 ```bash
-cd /Users/mikeearley/code/mcp_servers/ai-memory-mcp
+cd /path/to/ai-memory-mcp
 ```
 
 2. Install dependencies:
@@ -150,17 +130,30 @@ cd /Users/mikeearley/code/mcp_servers/ai-memory-mcp
 npm install
 ```
 
-3. Build the server:
+3. Set up the database:
+
+```bash
+# Copy environment file
+cp env.example .env
+
+# Edit .env with your database configuration
+# DATABASE_URL="postgresql://username:password@localhost:5432/database_name"
+```
+
+4. Initialize the database:
+
+```bash
+# Generate Prisma client
+npx prisma generate
+
+# Push database schema
+npx prisma db push
+```
+
+5. Build the server:
 
 ```bash
 npm run build
-```
-
-4. **For existing v1.0 users**: Run migration to upgrade your database:
-
-```bash
-npm run test-migration  # Test first
-npm run migrate         # Run migration
 ```
 
 ## Configuration
@@ -176,7 +169,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "ai-memory": {
       "command": "node",
-      "args": ["/Users/mikeearley/code/mcp_servers/ai-memory-mcp/dist/index-with-context-tools.js"],
+      "args": ["/path/to/ai-memory-mcp/dist/index.js"],
       "env": {
         "DATABASE_URL": "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
       }
@@ -187,7 +180,21 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ### Windows
 
-Edit `%APPDATA%/Claude/claude_desktop_config.json` with the appropriate path.
+Edit `%APPDATA%/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "ai-memory": {
+      "command": "node",
+      "args": ["C:\\path\\to\\ai-memory-mcp\\dist\\index.js"],
+      "env": {
+        "DATABASE_URL": "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}"
+      }
+    }
+  }
+}
+```
 
 ## Usage
 
@@ -359,9 +366,9 @@ Get category "technical"
 ## Database Location & Backup
 
 - **Database**: PostgreSQL database (configured via `DATABASE_URL`)
-- **Automatic Backups**: Migration creates timestamped backups
-- **Manual Backup**: Copy the `.ai-memory.db` file
+- **Manual Backup**: Use `pg_dump` to backup your PostgreSQL database
 - **Export Options**: Use export tools for JSON backups with full relationship data
+- **Prisma Studio**: Use `npx prisma studio` to view and manage data
 
 ## Development
 
@@ -375,16 +382,34 @@ npm run dev
 
 ```bash
 npm run build          # Build TypeScript
-npm run test-migration # Test migration safely
-npm run migrate        # Run production migration
 npm run dev           # Development mode
+npm run start         # Start production server
+npm run docker:build  # Build Docker image
+npm run docker:up     # Start with Docker Compose
+npm run docker:down   # Stop Docker containers
+npm run docker:logs   # View Docker logs
 ```
 
-### Database Tools
+### Project Structure
 
-- **Migration Script**: `src/migrate.js` - Complete v1 to v2 migration
-- **Project Fixer**: `src/fix-memory-projects.js` - Extract projects from memory titles
-- **Test Migration**: `src/test-migration.js` - Safe testing on database copies
+```
+ai-memory-mcp/
+├── src/                    # Source code
+├── dist/                   # Built files
+├── docs/                   # Documentation
+│   ├── README.md          # Main documentation
+│   ├── DEPLOYMENT.md      # Deployment guide
+│   ├── DOCKER_DEPLOYMENT.md
+│   └── archive/           # Historical docs
+├── scripts/               # Shell scripts and utilities
+├── tests/                 # Test files
+│   ├── integration/       # Integration tests
+│   └── unit/             # Unit tests
+├── examples/              # Example data files
+├── docker/                # Docker configuration
+├── prisma/                # Database schema
+└── logs/                  # Log files
+```
 
 ## Best Practices
 
@@ -404,11 +429,11 @@ npm run dev           # Development mode
 
 ## Troubleshooting
 
-### Migration Issues
+### Database Issues
 
-- **Backup Location**: Check for `.ai-memory.db.backup_*` files in your home directory
-- **Rollback**: Migration automatically rolls back on failure
-- **Test First**: Always run `npm run test-migration` before production migration
+- **Connection Issues**: Verify DATABASE_URL in your .env file
+- **Schema Issues**: Run `npx prisma db push` to sync schema
+- **Reset Database**: Use `npx prisma db push --force-reset` (WARNING: deletes all data)
 
 ### Performance
 
@@ -419,8 +444,8 @@ npm run dev           # Development mode
 ### Common Issues
 
 1. **Foreign Key Errors**: Usually indicate data integrity issues - check relationships
-2. **Migration Failures**: Often due to permissions - ensure write access to home directory
-3. **Undefined Values**: May indicate incomplete migration - run project fixer script
+2. **Database Connection**: Ensure PostgreSQL is running and DATABASE_URL is correct
+3. **Prisma Client**: Run `npx prisma generate` after schema changes
 
 ## Privacy and Security
 
@@ -431,25 +456,19 @@ npm run dev           # Development mode
 
 ## Version History
 
-### v2.0.0 (Current)
+### Current Version
 
 - **Normalized Database Schema**: Complete rewrite with foreign key relationships
 - **Project Management**: Full project CRUD with statistics
 - **Category Management**: Category lifecycle management with usage analytics
 - **Tag Normalization**: Many-to-many tag relationships
-- **Migration System**: Comprehensive v1 to v2 migration with backup/rollback
 - **Advanced Queries**: JOIN-based queries for rich relationship data
-- **Management Tools**: 15+ new tools for managing all entity types
-
-### v1.0.0 (Legacy)
-
-- Basic memory and task storage with text-based fields
-- Simple categorization and comma-separated tags
-- Basic search and filtering capabilities
+- **Management Tools**: 15+ tools for managing all entity types
+- **Professional Architecture**: Service and handler layers with TypeScript
 
 ## Contributing
 
-Version 2.0 provides a solid foundation for further enhancements:
+This version provides a solid foundation for further enhancements:
 
 - **Vector Embeddings**: Semantic search capabilities
 - **External Integrations**: Connect with other productivity tools
@@ -463,16 +482,14 @@ MIT License - feel free to modify and distribute as needed.
 
 ---
 
-## Quick Start for v2.0
+## Quick Start
 
-1. **Install**: `npm install && npm run build`
-2. **Migrate** (if upgrading): `npm run test-migration && npm run migrate`
-3. **Configure**: Add to Claude Desktop config
-4. **Test**: Create a memory with category and project
-5. **Explore**: Use `list_projects` and `list_categories` to see your data organization
+1. **Install**: `npm install`
+2. **Setup Database**: Copy `env.example` to `.env` and configure DATABASE_URL
+3. **Initialize**: `npx prisma generate && npx prisma db push`
+4. **Build**: `npm run build`
+5. **Configure**: Add to Claude Desktop config
+6. **Test**: Create a memory with category and project
+7. **Explore**: Use `list_projects` and `list_categories` to see your data organization
 
 Your AI assistant now has enterprise-grade persistent memory and task management! 🎉
-
-## Minor change
-
-just testing

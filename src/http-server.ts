@@ -213,6 +213,92 @@ class AIMemoryHTTPServer {
       }
     });
 
+    this.app.get('/api/task/export', async (req, res) => {
+      try {
+        const result = await this.taskHandlers.export_tasks(req.query);
+        res.json(result);
+      } catch (error) {
+        console.error('[Server] Error exporting tasks:', error);
+        res.status(500).json({ error: 'Failed to export tasks' });
+      }
+    });
+
+    this.app.post('/api/task/search', async (req, res) => {
+      try {
+        const result = await this.taskHandlers.search_tasks(req.body);
+        res.json(result);
+      } catch (error) {
+        console.error('[Server] Error searching tasks:', error);
+        res.status(500).json({ error: 'Failed to search tasks' });
+      }
+    });
+
+    this.app.get('/api/task/:id', async (req, res) => {
+      try {
+        const result = await this.taskHandlers.get_task({ id: parseInt(req.params.id) });
+        res.json(result);
+      } catch (error) {
+        console.error('[Server] Error getting task:', error);
+        res.status(500).json({ error: 'Failed to get task' });
+      }
+    });
+
+    this.app.put('/api/task/:id', async (req, res) => {
+      try {
+        const result = await this.taskHandlers.update_task({
+          ...req.body,
+          id: parseInt(req.params.id),
+        });
+        res.json(result);
+      } catch (error) {
+        console.error('[Server] Error updating task:', error);
+        res.status(500).json({ error: 'Failed to update task' });
+      }
+    });
+
+    this.app.post('/api/task/:id/complete', async (req, res) => {
+      try {
+        const result = await this.taskHandlers.complete_task({ id: parseInt(req.params.id) });
+        res.json(result);
+      } catch (error) {
+        console.error('[Server] Error completing task:', error);
+        res.status(500).json({ error: 'Failed to complete task' });
+      }
+    });
+
+    this.app.post('/api/task/:id/archive', async (req, res) => {
+      try {
+        const result = await this.taskHandlers.archive_task({
+          ...req.body,
+          id: parseInt(req.params.id),
+        });
+        res.json(result);
+      } catch (error) {
+        console.error('[Server] Error archiving task:', error);
+        res.status(500).json({ error: 'Failed to archive task' });
+      }
+    });
+
+    this.app.delete('/api/task/:id', async (req, res) => {
+      try {
+        const result = await this.taskHandlers.delete_task({ id: parseInt(req.params.id) });
+        res.json(result);
+      } catch (error) {
+        console.error('[Server] Error deleting task:', error);
+        res.status(500).json({ error: 'Failed to delete task' });
+      }
+    });
+
+    this.app.get('/api/task/stats', async (req, res) => {
+      try {
+        const result = await this.taskHandlers.get_task_stats(req.query);
+        res.json(result);
+      } catch (error) {
+        console.error('[Server] Error getting task stats:', error);
+        res.status(500).json({ error: 'Failed to get task stats' });
+      }
+    });
+
     // Server info endpoint
     this.app.get('/api/info', (req, res) => {
       res.json({
@@ -234,6 +320,14 @@ class AIMemoryHTTPServer {
             task: {
               create: '/api/task/create',
               list: '/api/task/list',
+              search: '/api/task/search',
+              get: '/api/task/:id',
+              update: '/api/task/:id',
+              complete: '/api/task/:id/complete',
+              archive: '/api/task/:id/archive',
+              delete: '/api/task/:id',
+              stats: '/api/task/stats',
+              export: '/api/task/export',
             },
           },
         },

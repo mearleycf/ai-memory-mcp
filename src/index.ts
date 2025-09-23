@@ -15,6 +15,7 @@ import { CategoryServiceImpl } from './services/category-service.js';
 import { ContextServiceImpl } from './services/context-service.js';
 import { AIInstructionServiceImpl } from './services/ai-instruction-service.js';
 import { StatusTagServiceImpl } from './services/status-tag-service.js';
+import { GitOperationsManager } from './core/git-operations-manager.js';
 
 // Import handlers
 import { createMemoryHandlers, memoryTools } from './handlers/memory-handlers.js';
@@ -27,6 +28,7 @@ import {
   aiInstructionTools,
 } from './handlers/ai-instruction-handlers.js';
 import { createStatusTagHandlers, statusTagTools } from './handlers/status-tag-handlers.js';
+import { createGitHandlers, gitTools } from './handlers/git-handlers.js';
 
 class AIMemoryServer {
   private server: Server;
@@ -40,6 +42,7 @@ class AIMemoryServer {
   private contextService!: ContextServiceImpl;
   private aiInstructionService!: AIInstructionServiceImpl;
   private statusTagService!: StatusTagServiceImpl;
+  private gitManager!: GitOperationsManager;
 
   // Handlers
   private memoryHandlers!: ReturnType<typeof createMemoryHandlers>;
@@ -49,6 +52,7 @@ class AIMemoryServer {
   private contextHandlers!: ReturnType<typeof createContextHandlers>;
   private aiInstructionHandlers!: ReturnType<typeof createAIInstructionHandlers>;
   private statusTagHandlers!: ReturnType<typeof createStatusTagHandlers>;
+  private gitHandlers!: ReturnType<typeof createGitHandlers>;
 
   constructor() {
     this.server = new Server(
@@ -88,6 +92,7 @@ class AIMemoryServer {
     this.contextService = new ContextServiceImpl(this.db, embeddingService);
     this.aiInstructionService = new AIInstructionServiceImpl(this.db);
     this.statusTagService = new StatusTagServiceImpl(this.db);
+    this.gitManager = new GitOperationsManager();
 
     // Initialize handlers
     this.memoryHandlers = createMemoryHandlers(this.db);
@@ -97,6 +102,7 @@ class AIMemoryServer {
     this.contextHandlers = createContextHandlers(this.contextService);
     this.aiInstructionHandlers = createAIInstructionHandlers(this.aiInstructionService);
     this.statusTagHandlers = createStatusTagHandlers(this.statusTagService);
+    this.gitHandlers = createGitHandlers(this.gitManager);
 
     console.log('[Server] Services and handlers initialized successfully');
   }
@@ -112,6 +118,7 @@ class AIMemoryServer {
           ...statusTagTools,
           ...contextTools,
           ...aiInstructionTools,
+          ...gitTools,
         ],
       };
     });
@@ -260,6 +267,50 @@ class AIMemoryServer {
             break;
           case 'batch_create_ai_instructions':
             result = await this.aiInstructionHandlers.batch_create_ai_instructions(args);
+            break;
+
+          // Git Operations
+          case 'git_status':
+            result = await this.gitHandlers.git_status(args);
+            break;
+          case 'git_add':
+            result = await this.gitHandlers.git_add(args);
+            break;
+          case 'git_commit':
+            result = await this.gitHandlers.git_commit(args);
+            break;
+          case 'git_push':
+            result = await this.gitHandlers.git_push(args);
+            break;
+          case 'git_pull':
+            result = await this.gitHandlers.git_pull(args);
+            break;
+          case 'git_create_branch':
+            result = await this.gitHandlers.git_create_branch(args);
+            break;
+          case 'git_checkout_branch':
+            result = await this.gitHandlers.git_checkout_branch(args);
+            break;
+          case 'git_list_branches':
+            result = await this.gitHandlers.git_list_branches(args);
+            break;
+          case 'git_delete_branch':
+            result = await this.gitHandlers.git_delete_branch(args);
+            break;
+          case 'git_configure':
+            result = await this.gitHandlers.git_configure(args);
+            break;
+          case 'git_get_config':
+            result = await this.gitHandlers.git_get_config(args);
+            break;
+          case 'git_log':
+            result = await this.gitHandlers.git_log(args);
+            break;
+          case 'git_diff':
+            result = await this.gitHandlers.git_diff(args);
+            break;
+          case 'git_smart_commit':
+            result = await this.gitHandlers.git_smart_commit(args);
             break;
 
           default:

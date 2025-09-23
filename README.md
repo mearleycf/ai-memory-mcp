@@ -140,9 +140,9 @@ npm run docker:up
 ```
 
 3. The server will be available at:
-   - **Health check**: http://localhost:3001/health
-   - **API info**: http://localhost:3001/api/info
-   - **MCP tools**: http://localhost:3001/mcp/tools/list
+   - **Health check**: <http://localhost:3001/health>
+   - **API info**: <http://localhost:3001/api/info>
+   - **MCP tools**: <http://localhost:3001/mcp/tools/list>
 
 ### Option 2: Local Development Setup
 

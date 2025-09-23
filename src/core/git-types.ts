@@ -3,13 +3,13 @@
  */
 
 export enum CommitType {
-  FEAT = "feat",
-  FIX = "fix", 
-  DOCS = "docs",
-  STYLE = "style",
-  REFACTOR = "refactor",
-  TEST = "test",
-  CHORE = "chore"
+  FEAT = 'feat',
+  FIX = 'fix',
+  DOCS = 'docs',
+  STYLE = 'style',
+  REFACTOR = 'refactor',
+  TEST = 'test',
+  CHORE = 'chore',
 }
 
 export interface GitConfig {
@@ -41,7 +41,7 @@ export interface GitOperationResult {
   success: boolean;
   message: string;
   data?: Record<string, any>;
-  error?: string;
+  error?: string | GitError;
 }
 
 export interface RepositoryContext {
@@ -75,5 +75,5 @@ export const DEFAULT_GIT_CONFIG: GitConfig = {
   remoteName: 'origin',
   autoPush: false,
   aiModel: 'claude-3-5-sonnet-latest',
-  maxFileSize: 10 * 1024 * 1024 // 10MB
+  maxFileSize: 10 * 1024 * 1024, // 10MB
 };

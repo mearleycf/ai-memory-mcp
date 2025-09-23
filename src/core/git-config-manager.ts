@@ -21,7 +21,17 @@ export class GitConfigManager {
     let config = { ...DEFAULT_GIT_CONFIG };
 
     try {
-      // Try to load repository-specific config
+      // Try to load global config first
+      const globalConfigPath = join(process.env.HOME || '~', '.mcp-git-config.json');
+      const globalConfigExists = await this.fileExists(globalConfigPath);
+
+      if (globalConfigExists) {
+        const globalConfigData = await fs.readFile(globalConfigPath, 'utf-8');
+        const globalConfig = JSON.parse(globalConfigData);
+        config = { ...config, ...globalConfig };
+      }
+
+      // Try to load repository-specific config (overrides global)
       const repoConfigPath = join(repoPath, '.git', 'mcp-git-config.json');
       const repoConfigExists = await this.fileExists(repoConfigPath);
 
@@ -29,17 +39,6 @@ export class GitConfigManager {
         const repoConfigData = await fs.readFile(repoConfigPath, 'utf-8');
         const repoConfig = JSON.parse(repoConfigData);
         config = { ...config, ...repoConfig };
-      }
-
-      // Try to load global config
-      const globalConfigPath = join(process.env.HOME || '~', '.mcp-git-config.json');
-      const globalConfigExists = await this.fileExists(globalConfigPath);
-
-      if (globalConfigExists) {
-        const globalConfigData = await fs.readFile(globalConfigPath, 'utf-8');
-        const globalConfig = JSON.parse(globalConfigData);
-        // Repository config takes precedence over global
-        config = { ...globalConfig, ...config };
       }
     } catch (error) {
       console.warn('[GitConfigManager] Error loading config, using defaults:', error);

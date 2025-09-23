@@ -242,6 +242,8 @@ export interface ListTasksArgs {
   sort_by?: string;
   sort_order?: string;
   limit?: number;
+  offset?: number;
+  include_archived?: boolean;
   include_instructions?: boolean;
 }
 
@@ -253,6 +255,7 @@ export interface SearchTasksArgs {
   priority_min?: number;
   limit?: number;
   min_similarity?: number;
+  include_archived?: boolean;
 }
 
 export interface GetTaskArgs {
@@ -285,7 +288,9 @@ export interface DeleteTaskArgs {
 }
 
 export interface GetTaskStatsArgs {
-  // No specific arguments needed
+  category?: string;
+  project?: string;
+  include_archived?: boolean;
 }
 
 export interface ExportTasksArgs {

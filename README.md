@@ -2,17 +2,20 @@
 
 A comprehensive Model Context Protocol (MCP) server that provides persistent memory and task management capabilities for AI conversations with a **normalized relational database**. Store context, preferences, and information that persists across conversations, plus manage tasks and projects with sophisticated relationship tracking.
 
-## 🆕 Current Version - Normalized Database Schema
+## 🆕 Current Version - v2.2.0 with HTTP Server & Security
 
-This version features a **normalized relational database** with:
+This version features:
 
-- **Foreign key relationships** instead of text-based fields
+- **Dual Server Modes**: Both MCP (stdio) and HTTP server capabilities
+- **Enhanced Security**: Rate limiting, CORS, input sanitization, and security headers
+- **Normalized Database Schema**: Foreign key relationships and data integrity
 - **Many-to-many tag relationships** for flexible organization
 - **Project management system** with full CRUD operations
 - **Category management** with usage statistics
 - **Advanced relationship queries** with JOIN operations
-- **Data integrity** through foreign key constraints
 - **Professional architecture** with service and handler layers
+- **Git Operations**: Built-in git management tools
+- **Context Tools**: Advanced context retrieval and work prioritization
 
 ## Features
 
@@ -143,6 +146,7 @@ npm run docker:up
    - **Health check**: <http://localhost:3001/health>
    - **API info**: <http://localhost:3001/api/info>
    - **MCP tools**: <http://localhost:3001/mcp/tools/list>
+   - **Direct API endpoints**: <http://localhost:3001/api/task/list>, <http://localhost:3001/api/memory/list>
 
 ### Option 2: Local Development Setup
 
@@ -186,9 +190,11 @@ npm run build
 
 ## Configuration
 
+### MCP Server Configuration (for Claude Desktop)
+
 Add the server to your Claude Desktop configuration file:
 
-### macOS
+#### macOS
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -206,7 +212,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-### Windows
+#### Windows
 
 Edit `%APPDATA%/Claude/claude_desktop_config.json`:
 
@@ -223,6 +229,24 @@ Edit `%APPDATA%/Claude/claude_desktop_config.json`:
   }
 }
 ```
+
+### HTTP Server Configuration
+
+The server can also run as a standalone HTTP server for external integrations:
+
+```bash
+# Start HTTP server
+npm run dev-http    # Development mode
+npm run start-http  # Production mode
+```
+
+**HTTP Server Features:**
+
+- RESTful API endpoints for all operations
+- MCP protocol compatibility via HTTP
+- Security middleware (rate limiting, CORS, input sanitization)
+- Health checks and monitoring
+- HTTPS support (configure with SSL certificates)
 
 ## Usage
 
@@ -348,7 +372,7 @@ Get category "technical"
 - `get_task_stats`: Comprehensive task statistics by project, category, status
 - `export_tasks`: Export with full relationship data
 
-### Project Management Tools (NEW)
+### Project Management Tools
 
 - `create_project`: Create new projects with descriptions and colors
 - `list_projects`: List all projects with memory/task statistics
@@ -356,7 +380,7 @@ Get category "technical"
 - `update_project`: Update project details
 - `delete_project`: Delete projects (sets related items to null)
 
-### Category Management Tools (NEW)
+### Category Management Tools
 
 - `create_category`: Create new categories with descriptions
 - `get_category`: Get detailed category information and usage stats
@@ -364,14 +388,47 @@ Get category "technical"
 - `delete_category`: Delete categories (sets related items to null)
 - `list_categories`: List all categories with usage statistics
 
-### Tag Management Tools (NEW)
+### Tag Management Tools
 
 - `list_tags`: List all tags with usage statistics across memories and tasks
 - `delete_tag`: Delete tags and remove all relationships
 
-### Status Management Tools (NEW)
+### Status Management Tools
 
 - `list_statuses`: View all available task statuses with descriptions
+
+### Context Management Tools (NEW)
+
+- `get_project_context`: Get comprehensive context for a project including memories, tasks, and AI instructions
+- `get_task_context`: Get detailed context for a specific task with related memories and project info
+- `get_memory_context`: Get context for a memory including related tasks and project info
+- `get_work_priorities`: Get prioritized work items across all projects
+
+### AI Instruction Management Tools (NEW)
+
+- `create_ai_instruction`: Create AI instructions with scope-based targeting (global, project, category)
+- `list_ai_instructions`: List AI instructions with filtering options
+- `get_ai_instructions`: Get applicable AI instructions for specific contexts
+- `update_ai_instruction`: Update existing AI instructions
+- `delete_ai_instruction`: Delete AI instructions
+- `batch_create_ai_instructions`: Create multiple AI instructions in a single operation
+
+### Git Operations Tools (NEW)
+
+- `git_status`: Get current git repository status
+- `git_add`: Stage files for commit
+- `git_commit`: Create commits with messages
+- `git_push`: Push changes to remote repository
+- `git_pull`: Pull changes from remote repository
+- `git_create_branch`: Create new branches
+- `git_checkout_branch`: Switch between branches
+- `git_list_branches`: List all branches
+- `git_delete_branch`: Delete branches
+- `git_configure`: Configure git settings
+- `git_get_config`: Get git configuration
+- `git_log`: View commit history
+- `git_diff`: Show differences between commits
+- `git_smart_commit`: Intelligent commit with automatic message generation
 
 ## Example Categories and Projects
 
@@ -409,14 +466,27 @@ npm run dev
 ### Available Scripts
 
 ```bash
+# MCP Server (for Claude Desktop)
 npm run build          # Build TypeScript
-npm run dev           # Development mode
-npm run start         # Start production server
+npm run dev           # Development mode (MCP)
+npm run start         # Start production MCP server
+
+# HTTP Server (for external integrations)
+npm run dev-http      # Development HTTP server
+npm run start-http    # Production HTTP server
+npm run build-http    # Build HTTP server
+
+# Docker Operations
 npm run docker:build  # Build Docker image
 npm run docker:up     # Start with Docker Compose
 npm run docker:down   # Stop Docker containers
 npm run docker:logs   # View Docker logs
 npm run docker:restart # Restart the server container
+
+# Testing and Validation
+npm run test          # Run tests
+npm run test-validation # Run validation tests
+npm run dev-validation # Development with validation
 ```
 
 ## Docker Setup
@@ -623,4 +693,23 @@ MIT License - feel free to modify and distribute as needed.
 6. **Test**: Create a memory with category and project
 7. **Explore**: Use `list_projects` and `list_categories` to see your data organization
 
+### HTTP Server (for External Integrations)
+
+1. **Start HTTP Server**: `npm run dev-http`
+2. **Test Endpoints**: Visit `http://localhost:3001/health`
+3. **API Documentation**: Visit `http://localhost:3001/api/info`
+4. **Use REST API**: Direct HTTP calls to `/api/memory/*` and `/api/task/*` endpoints
+
 Your AI assistant now has enterprise-grade persistent memory and task management! 🎉
+
+## Security Features
+
+The server includes comprehensive security measures:
+
+- **Rate Limiting**: Prevents abuse with configurable limits
+- **CORS Protection**: Controlled cross-origin resource sharing
+- **Input Sanitization**: Prevents injection attacks
+- **Security Headers**: Standard security headers (Helmet.js)
+- **Request Logging**: Comprehensive audit trail
+- **Error Sanitization**: Prevents information disclosure
+- **HTTPS Support**: SSL/TLS encryption for production

@@ -12,12 +12,19 @@ RUN apt-get update && apt-get install -y \
     g++ \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy package files
+# Copy package files and entrypoint script
 COPY package*.json ./
 COPY prisma ./prisma/
+COPY docker/entrypoint.sh ./entrypoint.sh
 
 # Install all dependencies (including dev dependencies for build)
 RUN npm ci
+
+# Install PostgreSQL client for pg_isready command
+RUN apt-get update && apt-get install -y postgresql-client && rm -rf /var/lib/apt/lists/*
+
+# Make entrypoint script executable
+RUN chmod +x ./entrypoint.sh
 
 # Copy source code
 COPY src ./src/
@@ -41,5 +48,5 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD node -e "require('http').get('http://localhost:3000/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) })"
 
-# Start the server
-CMD ["node", "dist/http-server.js"]
+# Start the server with migrations
+CMD ["./entrypoint.sh"]

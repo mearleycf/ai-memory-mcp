@@ -111,7 +111,7 @@ export class MemoryServiceImpl implements MemoryService {
       }
 
       // Get the created memory with relations
-      const memoryWithRelations = await this.getMemoryWithRelations(memoryId);
+      const memoryWithRelations = await this.getMemoryWithRelations(memoryId, false);
 
       return createMCPResponse(memoryWithRelations, `Memory "${title}" stored successfully`);
     });
@@ -583,7 +583,10 @@ export class MemoryServiceImpl implements MemoryService {
   /**
    * Get memory with all relations (categories, projects, tags)
    */
-  private async getMemoryWithRelations(memoryId: number): Promise<Memory | null> {
+  private async getMemoryWithRelations(
+    memoryId: number,
+    includeEmbedding: boolean = false
+  ): Promise<Memory | null> {
     const memory = await this.db.client.memory.findUnique({
       where: { id: memoryId },
       include: {
@@ -601,7 +604,7 @@ export class MemoryServiceImpl implements MemoryService {
       return null;
     }
 
-    return {
+    const result: any = {
       id: memory.id,
       title: memory.title,
       content: memory.content,
@@ -611,10 +614,16 @@ export class MemoryServiceImpl implements MemoryService {
       tags: memory.memoryTags.map((mt: any) => mt.tag.name),
       created_at: memory.createdAt.toISOString(),
       updated_at: memory.updatedAt.toISOString(),
-      embedding: memory.embedding || undefined,
-      embedding_model: memory.embeddingModel || undefined,
-      embedding_created_at: memory.embeddingCreatedAt?.toISOString() || undefined,
     };
+
+    // Only include embedding data if explicitly requested
+    if (includeEmbedding) {
+      result.embedding = memory.embedding || undefined;
+      result.embedding_model = memory.embeddingModel || undefined;
+      result.embedding_created_at = memory.embeddingCreatedAt?.toISOString() || undefined;
+    }
+
+    return result;
   }
 
   /**

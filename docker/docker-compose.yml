@@ -28,6 +28,15 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       NODE_ENV: production
       PORT: 3000
+      USE_HTTPS: ${USE_HTTPS}
+      SSL_KEY_PATH: ${SSL_KEY_PATH}
+      SSL_CERT_PATH: ${SSL_CERT_PATH}
+      API_KEY: ${API_KEY}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS}
+      RATE_LIMIT_MAX_REQUESTS: ${RATE_LIMIT_MAX_REQUESTS}
+      LOG_LEVEL: ${LOG_LEVEL}
+      LOG_FILE: ${LOG_FILE}
     ports:
       - '3001:3000'
     depends_on:
@@ -35,6 +44,8 @@ services:
         condition: service_healthy
     volumes:
       - ./logs:/app/logs
+      - ./private-key.pem:/app/private-key.pem
+      - ./certificate.pem:/app/certificate.pem
     restart: unless-stopped
     healthcheck:
       test:

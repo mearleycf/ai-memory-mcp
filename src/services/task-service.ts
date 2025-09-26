@@ -48,6 +48,7 @@ export interface TaskService {
   deleteTask(args: DeleteTaskArgs): Promise<MCPResponse>;
   getTaskStats(args: GetTaskStatsArgs): Promise<MCPResponse>;
   exportTasks(args: ExportTasksArgs): Promise<MCPResponse>;
+  batchCreateTasks(args: any): Promise<MCPResponse>;
 }
 
 /**
@@ -150,7 +151,7 @@ export class TaskServiceImpl implements TaskService {
       }
 
       // Get the created task with relations
-      const task = await this.getTaskWithRelations(taskId);
+      const task = await this.getTaskWithRelations(taskId, false);
 
       return createMCPResponse(task, `Task "${title}" created successfully`);
     });
@@ -224,7 +225,16 @@ export class TaskServiceImpl implements TaskService {
 
       // Build orderBy
       const orderBy: any = {};
-      orderBy[sort_by] = sort_order.toLowerCase();
+      // Map sort_by to correct Prisma field names
+      const fieldMapping: { [key: string]: string } = {
+        'created_at': 'createdAt',
+        'updated_at': 'updatedAt',
+        'due_date': 'dueDate',
+        'title': 'title',
+        'priority': 'priority'
+      };
+      const prismaField = fieldMapping[sort_by] || sort_by;
+      orderBy[prismaField] = sort_order.toLowerCase();
 
       const tasks = await this.db.client.task.findMany({
         where,
@@ -384,7 +394,7 @@ export class TaskServiceImpl implements TaskService {
         throw createValidationError('Valid task ID is required');
       }
 
-      const task = await this.getTaskWithRelations(id);
+      const task = await this.getTaskWithRelations(id, false);
 
       if (!task) {
         throw createNotFoundError(`Task with ID ${id} not found`);
@@ -594,7 +604,7 @@ export class TaskServiceImpl implements TaskService {
       }
 
       // Get the updated task with relations
-      const taskWithRelations = await this.getTaskWithRelations(id);
+      const taskWithRelations = await this.getTaskWithRelations(id, false);
 
       return createMCPResponse(
         taskWithRelations,
@@ -627,7 +637,7 @@ export class TaskServiceImpl implements TaskService {
       }
 
       // Get the updated task with relations
-      const updatedTask = await this.getTaskWithRelations(id);
+      const updatedTask = await this.getTaskWithRelations(id, false);
 
       return createMCPResponse(
         updatedTask,
@@ -797,9 +807,113 @@ export class TaskServiceImpl implements TaskService {
   }
 
   /**
+   * Create multiple tasks in a single batch operation
+   */
+  async batchCreateTasks(args: any): Promise<MCPResponse> {
+    return handleAsyncError(async () => {
+      const { tasks, continue_on_error = false } = args;
+      const results = [];
+      const errors = [];
+
+      for (let i = 0; i < tasks.length; i++) {
+        try {
+          const task = tasks[i];
+          const result = await this.createTask(task);
+
+          // Check if the result indicates success (has content with id)
+          if (result.content && Array.isArray(result.content) && result.content.length > 0) {
+            const contentItem = result.content[0];
+            if (contentItem && contentItem.type === 'text' && contentItem.text) {
+              try {
+                const parsedResponse = JSON.parse(contentItem.text);
+                if (
+                  parsedResponse.success &&
+                  parsedResponse.data &&
+                  typeof parsedResponse.data === 'object' &&
+                  'id' in parsedResponse.data
+                ) {
+                  results.push({
+                    index: i,
+                    success: true,
+                    task: parsedResponse.data,
+                  });
+                } else {
+                  errors.push({
+                    index: i,
+                    error: 'Task creation failed - no valid response',
+                  });
+
+                  if (!continue_on_error) {
+                    throw new Error(`Task ${i} failed: Task creation failed - no valid response`);
+                  }
+                }
+              } catch (parseError) {
+                errors.push({
+                  index: i,
+                  error: 'Task creation failed - invalid response format',
+                });
+
+                if (!continue_on_error) {
+                  throw new Error(
+                    `Task ${i} failed: Task creation failed - invalid response format`
+                  );
+                }
+              }
+            } else {
+              errors.push({
+                index: i,
+                error: 'Task creation failed - no valid response',
+              });
+
+              if (!continue_on_error) {
+                throw new Error(`Task ${i} failed: Task creation failed - no valid response`);
+              }
+            }
+          } else {
+            errors.push({
+              index: i,
+              error: 'Task creation failed - invalid response format',
+            });
+
+            if (!continue_on_error) {
+              throw new Error(`Task ${i} failed: Task creation failed - invalid response format`);
+            }
+          }
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          errors.push({
+            index: i,
+            error: errorMessage,
+          });
+
+          if (!continue_on_error) {
+            throw new Error(`Task ${i} failed: ${errorMessage}`);
+          }
+        }
+      }
+
+      return createMCPResponse(
+        {
+          created_tasks: results,
+          errors: errors,
+          summary: {
+            total: tasks.length,
+            successful: results.length,
+            failed: errors.length,
+          },
+        },
+        `Batch operation completed: ${results.length} successful, ${errors.length} failed`
+      );
+    });
+  }
+
+  /**
    * Get task with all relations (status, category, project, tags)
    */
-  private async getTaskWithRelations(taskId: number): Promise<Task | null> {
+  private async getTaskWithRelations(
+    taskId: number,
+    includeEmbedding: boolean = false
+  ): Promise<Task | null> {
     const task = await this.db.client.task.findUnique({
       where: { id: taskId },
       include: {
@@ -818,7 +932,7 @@ export class TaskServiceImpl implements TaskService {
       return null;
     }
 
-    return {
+    const result: any = {
       id: task.id,
       title: task.title,
       description: task.description,
@@ -831,10 +945,16 @@ export class TaskServiceImpl implements TaskService {
       updated_at: task.updatedAt.toISOString(),
       completed_at: task.completedAt?.toISOString(),
       archived: task.archived,
-      embedding: task.embedding || undefined,
-      embedding_model: task.embeddingModel || undefined,
-      embedding_created_at: task.embeddingCreatedAt?.toISOString(),
     };
+
+    // Only include embedding data if explicitly requested
+    if (includeEmbedding) {
+      result.embedding = task.embedding || undefined;
+      result.embedding_model = task.embeddingModel || undefined;
+      result.embedding_created_at = task.embeddingCreatedAt?.toISOString();
+    }
+
+    return result;
   }
 
   /**

@@ -189,6 +189,9 @@ class AIMemoryServer {
           case 'export_tasks':
             result = await this.taskHandlers.export_tasks(args);
             break;
+          case 'batch_create_tasks':
+            result = await this.taskHandlers.batch_create_tasks(args);
+            break;
 
           // Project Management
           case 'create_project':

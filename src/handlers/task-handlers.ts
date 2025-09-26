@@ -330,6 +330,71 @@ export const taskTools: Tool[] = [
       },
     },
   },
+  {
+    name: 'batch_create_tasks',
+    description: 'Create multiple tasks in a single batch operation',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tasks: {
+          type: 'array',
+          description: 'Array of tasks to create',
+          items: {
+            type: 'object',
+            properties: {
+              title: {
+                type: 'string',
+                description: 'Task title',
+              },
+              description: {
+                type: 'string',
+                description: 'Task description (optional)',
+                default: '',
+              },
+              status: {
+                type: 'string',
+                description: 'Task status (default: not_started)',
+                default: 'not_started',
+              },
+              category: {
+                type: 'string',
+                description: 'Category for the task (default: general)',
+                default: 'general',
+              },
+              project: {
+                type: 'string',
+                description: 'Associated project name (optional)',
+              },
+              tags: {
+                type: 'string',
+                description: 'Comma-separated tags (optional)',
+              },
+              priority: {
+                type: 'number',
+                description: 'Priority level (1-5, default: 1)',
+                minimum: 1,
+                maximum: 5,
+                default: 1,
+              },
+              due_date: {
+                type: 'string',
+                description: 'Due date in YYYY-MM-DD format (optional)',
+              },
+            },
+            required: ['title'],
+          },
+          minItems: 1,
+          maxItems: 100,
+        },
+        continue_on_error: {
+          type: 'boolean',
+          description: 'Whether to continue processing if individual tasks fail (default: false)',
+          default: false,
+        },
+      },
+      required: ['tasks'],
+    },
+  },
 ];
 
 /**
@@ -530,6 +595,50 @@ export function createTaskHandlers(db: PrismaDatabaseService) {
       } catch (error) {
         return createErrorResponse(
           `Failed to export tasks: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    },
+
+    async batch_create_tasks(args: any) {
+      try {
+        // Validate tasks array
+        if (!Array.isArray(args.tasks)) {
+          return createErrorResponse('Tasks must be an array');
+        }
+
+        if (args.tasks.length === 0) {
+          return createErrorResponse('Tasks array cannot be empty');
+        }
+
+        if (args.tasks.length > 100) {
+          return createErrorResponse('Cannot create more than 100 tasks in a single batch');
+        }
+
+        // Validate each task in the array
+        for (let i = 0; i < args.tasks.length; i++) {
+          const task = args.tasks[i];
+
+          if (!task || typeof task !== 'object') {
+            return createErrorResponse(`Task at index ${i} must be an object`);
+          }
+
+          if (!task.title || typeof task.title !== 'string') {
+            return createErrorResponse(`Title is required for task ${i}`);
+          }
+
+          if (task.priority && (task.priority < 1 || task.priority > 5)) {
+            return createErrorResponse(`Priority must be between 1 and 5 for task ${i}`);
+          }
+
+          if (task.due_date && !isValidDate(task.due_date)) {
+            return createErrorResponse(`Invalid due date format for task ${i}. Use YYYY-MM-DD`);
+          }
+        }
+
+        return await taskService.batchCreateTasks(args);
+      } catch (error) {
+        return createErrorResponse(
+          `Failed to create tasks: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
       }
     },

@@ -9,6 +9,15 @@ import cors from 'cors';
 import { createServer } from 'http';
 import { createServer as createHttpsServer } from 'https';
 import { readFileSync } from 'fs';
+import {
+  authenticateRequest,
+  createRateLimiter,
+  securityHeaders,
+  corsOptions,
+  sanitizeInput,
+  requestLogger,
+  sanitizeErrorResponse,
+} from './middleware/security.js';
 
 // Import service implementations
 import { MemoryServiceImpl } from './services/memory-service.js';
@@ -109,12 +118,36 @@ class AIMemoryHTTPServer {
   }
 
   private setupMiddleware() {
+    // Security headers
+    this.app.use(securityHeaders);
+
     // Disable X-Powered-By header for security
     this.app.disable('x-powered-by');
 
-    this.app.use(cors());
+    // CORS with restrictions
+    this.app.use(cors(corsOptions));
+
+    // Request logging
+    this.app.use(requestLogger);
+
+    // Rate limiting
+    this.app.use('/api/', createRateLimiter(15 * 60 * 1000, 100)); // 100 requests per 15 minutes
+    this.app.use('/mcp/', createRateLimiter(15 * 60 * 1000, 50)); // 50 requests per 15 minutes for MCP
+
+    // Body parsing with limits
     this.app.use(express.json({ limit: '10mb' }));
-    this.app.use(express.urlencoded({ extended: true }));
+    this.app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+    // Input sanitization
+    this.app.use(sanitizeInput);
+
+    // Authentication (skip for health check)
+    this.app.use((req, res, next) => {
+      if (req.path === '/health' || req.path === '/api/info') {
+        return next();
+      }
+      return authenticateRequest(req, res, next);
+    });
   }
 
   private setupRoutes() {
@@ -200,6 +233,16 @@ class AIMemoryHTTPServer {
       } catch (error) {
         console.error('[Server] Error creating task:', error);
         res.status(500).json({ error: 'Failed to create task' });
+      }
+    });
+
+    this.app.post('/api/task/batch-create', async (req, res) => {
+      try {
+        const result = await this.taskHandlers.batch_create_tasks(req.body);
+        res.json(result);
+      } catch (error) {
+        console.error('[Server] Error batch creating tasks:', error);
+        res.status(500).json({ error: 'Failed to batch create tasks' });
       }
     });
 
@@ -319,6 +362,7 @@ class AIMemoryHTTPServer {
             },
             task: {
               create: '/api/task/create',
+              batchCreate: '/api/task/batch-create',
               list: '/api/task/list',
               search: '/api/task/search',
               get: '/api/task/:id',
@@ -395,6 +439,9 @@ class AIMemoryHTTPServer {
         break;
       case 'export_tasks':
         result = await this.taskHandlers.export_tasks(args);
+        break;
+      case 'batch_create_tasks':
+        result = await this.taskHandlers.batch_create_tasks(args);
         break;
 
       // Project Management
@@ -484,10 +531,11 @@ class AIMemoryHTTPServer {
     this.app.use(
       (error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
         console.error('[Server] Unhandled error:', error);
-        res.status(500).json({
-          error: 'Internal server error',
-          message: error.message,
-        });
+
+        // Sanitize error response to prevent information disclosure
+        const sanitizedError = sanitizeErrorResponse(error);
+
+        res.status(500).json(sanitizedError);
       }
     );
 
